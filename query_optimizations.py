@@ -36,7 +36,7 @@ def optimize_queries_main(main_model, feedback_model, dataset, k, lr, n_steps, T
             set2 = f_d[(top_k[q_id]).to(f_d.device)].to(device)
         d2 = F.softmax(feedback_model.compute_scores(q2, set2) / T, -1).to(device)
         d1 = F.softmax(main_model.compute_scores(q1, set1) / T, -1).to(device)
-        mixture_d = mixture_alpha*d1 + (1-mixture_alpha)*d2
+        mixture_d = (1-mixture_alpha)*d1 + mixture_alpha*d2
         for step in range(n_steps):
             d1 = F.softmax(main_model.compute_scores(q1, set1) / T, -1).to(device)
             loss = loss_func(mixture_d, d1)
@@ -67,7 +67,7 @@ def optimize_queries_union(main_model, feedback_model, dataset, k, lr, n_steps, 
         u = torch.unique(torch.cat([top_idx1[i], top_idx2[i]]))
         d1 = torch.softmax(sim1[i, u] / T, dim=-1).to(device)
         d2 = torch.softmax(sim2[i, u] / T, dim=-1).to(device)
-        mixture_d = mixture_alpha*d1 + (1-mixture_alpha)*d2
+        mixture_d = (1-mixture_alpha)*d1 + mixture_alpha*d2
         for step in range(n_steps):
             docs_u = d.index_select(0, u.to(d.device))
             d1 = F.softmax(main_model.compute_scores(qs[i], docs_u) / T, -1).to(device)
@@ -99,7 +99,7 @@ def optimize_queries_union_sample(main_model, feedback_model, dataset, k, lr, n_
         u = torch.unique(torch.cat([top_idx1[i], top_idx2[i]]))
         d1 = sim1[i, u].to(device)
         d2 = sim2[i, u].to(device)
-        mixture_d = mixture_alpha*d1 + (1-mixture_alpha)*d2
+        mixture_d = (1-mixture_alpha)*d1 + mixture_alpha*d2
         for step in range(n_steps):
             indices_to_sample = torch.randperm(u.size()[0])[:10]
             docs_u = d.index_select(0, u[indices_to_sample].to(d.device))

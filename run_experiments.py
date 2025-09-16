@@ -291,7 +291,7 @@ def main(args):
                 mod_1_weight = 0.5
                 if args.tune:
                     for res_dict in baselines:
-                        if "sim_score_minmax" in res_dict["run_id"]:
+                        if "sim_score_softmax" in res_dict["run_id"]:
                             assert f"{mod_1.id}-{mod_2.id}" in res_dict["run_id"]
                             mod_1_weight = res_dict["weight"]
 

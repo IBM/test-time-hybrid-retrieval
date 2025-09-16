@@ -35,7 +35,7 @@ def run_baselines(dataset: RagDataset, mod_1, mod_2, r1, r2, top_idx_1, top_idx_
     results = []
     info_dict = {
         "lr": 0.0, "k": 0, "n_steps": 0, "temp": 0.0,
-        "is_mixture": False, "loss_func": "baseline",
+        "mixture_alpha": 0, "loss_func": "baseline",
         "weight": 0,
         "optimization_func": "", "optimizer": "",
         "dataset": dataset.id,
@@ -139,7 +139,10 @@ def run_baselines(dataset: RagDataset, mod_1, mod_2, r1, r2, top_idx_1, top_idx_
     return results
 
 
-def tune_hyper(dataset, mod_1, mod_2, device, input_params, target_metric='ndcg@5'):
+def tune_hyper(dataset, mod_1, mod_2, device, input_params, weight_for_feedback_model=0.5, target_metric='ndcg@5'):
+    if any(x[4] == "dynamic" for x in input_params):
+        input_params = [p[:4] + (weight_for_feedback_model,) + p[5:]
+                        if p[4] == "dynamic" else p for p in input_params]
     dev_results = []
     for run_args in tqdm.tqdm(input_params):
         dev_results.append(run_query_optimizations(dataset, mod_1, mod_2, device, *run_args, split=DataSplit.DEV))
@@ -153,7 +156,7 @@ def tune_hyper(dataset, mod_1, mod_2, device, input_params, target_metric='ndcg@
     return best_params
 
 
-def run_query_optimizations(dataset, mod_1: Retriever, mod_2: Retriever, device, lr, k, n, t, is_mixture,
+def run_query_optimizations(dataset, mod_1: Retriever, mod_2: Retriever, device, lr, k, n, t, mixture_alpha,
                             loss_func: Callable, optimizer: torch.optim.Optimizer, optimization_func: Callable,
                             split=DataSplit.TEST):
     if mod_1.is_sparse:
@@ -161,7 +164,7 @@ def run_query_optimizations(dataset, mod_1: Retriever, mod_2: Retriever, device,
     else:
         optimized_queries = optimization_func(
             mod_1, mod_2, dataset, device=device,
-            k=k, lr=lr, n_steps=n, T=t, is_mixture=is_mixture, loss_func=loss_func,
+            k=k, lr=lr, n_steps=n, T=t, mixture_alpha=mixture_alpha, loss_func=loss_func,
             optimizer=optimizer, split=split)
 
         r, _ = mod_1.run_retrieval(dataset, q=optimized_queries.to(device), split=split)
@@ -238,7 +241,7 @@ def main(args):
     ]
     Ts = [1]
     mixture = [
-        True
+        "dynamic"
     ]
     loss_funcs = [
         kl_divergence,
@@ -260,7 +263,7 @@ def main(args):
     models_in_experiment = [Retriever(m) for m in models_in_experiment]
     h = get_run_hash(models_in_experiment, datasets_in_experiment, lrs, ks, n_steps, Ts, mixture,
                      loss_funcs, optimizers, optimization_funcs)
-    out_dir = f"results-{h}{args.out_dir_suffix}"
+    out_dir = f"output/results-{h}{args.out_dir_suffix}"
     os.makedirs(out_dir, exist_ok=True)
     print(f"Results in {out_dir}")
 
@@ -285,15 +288,23 @@ def main(args):
                 baselines = run_baselines(dataset, mod_1, mod_2,
                                           r1, r2, top_idx_1, top_idx_2)
                 rows += baselines
+                mod_1_weight = 0.5
+                if args.tune:
+                    for res_dict in baselines:
+                        if "sim_score_minmax" in res_dict["run_id"]:
+                            assert f"{mod_1.id}-{mod_2.id}" in res_dict["run_id"]
+                            mod_1_weight = res_dict["weight"]
 
                 exp_results = []
-                input_params = [(lr, k, n, t, is_mixture, loss_func, optimizer, optimization_func)
-                                for lr, k, n, t, is_mixture, loss_func, optimizer, optimization_func,
+                input_params = [(lr, k, n, t, mixture_alpha, loss_func, optimizer, optimization_func)
+                                for lr, k, n, t, mixture_alpha, loss_func, optimizer, optimization_func,
                                 in product(lrs, ks, n_steps, Ts, mixture, loss_funcs, optimizers, optimization_funcs)]
 
                 if args.tune and len(input_params) > 1:
-                    mod_1_best_params = tune_hyper(dataset, mod_1, mod_2, device, input_params)
-                    mod_2_best_params = tune_hyper(dataset, mod_2, mod_1, device, input_params)
+                    mod_1_best_params = tune_hyper(dataset, mod_1, mod_2, device, input_params,
+                                                   weight_for_feedback_model=1-mod_1_weight)
+                    mod_2_best_params = tune_hyper(dataset, mod_2, mod_1, device, input_params,
+                                                   weight_for_feedback_model=mod_1_weight)
                     input_params = [(dataset, mod_1, mod_2, device, *mod_1_best_params),
                                     (dataset, mod_2, mod_1, device, *mod_2_best_params)]
                 else:
@@ -317,7 +328,7 @@ def main(args):
                     for run_args in tqdm.tqdm(input_params, desc=description):
                         exp_results.append(run_query_optimizations(*run_args))
 
-                for result_dict, (_, _, _, _, lr, k, n, t, is_mixture, loss_func, optimizer, optimization_func) in zip(
+                for result_dict, (_, _, _, _, lr, k, n, t, mixture_alpha, loss_func, optimizer, optimization_func) in zip(
                         exp_results, input_params):
                     if len(result_dict) == 0:
                         continue
@@ -328,7 +339,7 @@ def main(args):
                         "k": k,
                         "n_steps": n,
                         "temp": t,
-                        "is_mixture": is_mixture,
+                        "mixture_alpha": mixture_alpha,
                         "loss_func": loss_func.__name__,
                         "optimization_func": optimization_func.__name__,
                         "optimizer": optimizer.__name__,

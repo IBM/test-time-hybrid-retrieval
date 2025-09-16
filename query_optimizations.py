@@ -15,7 +15,7 @@ def kl_divergence(p, q, eps=1e-8):
     return torch.sum(p * torch.log((p + eps) / (q + eps)))
 
 
-def optimize_queries_main(main_model, feedback_model, dataset, k, lr, n_steps, T, is_mixture, loss_func, device,
+def optimize_queries_main(main_model, feedback_model, dataset, k, lr, n_steps, T, mixture_alpha, loss_func, device,
                           optimizer, split: DataSplit):
     f_d, f_q_dict = feedback_model.load_embs(dataset)
     f_q = f_q_dict[split]
@@ -36,11 +36,10 @@ def optimize_queries_main(main_model, feedback_model, dataset, k, lr, n_steps, T
             set2 = f_d[(top_k[q_id]).to(f_d.device)].to(device)
         d2 = F.softmax(feedback_model.compute_scores(q2, set2) / T, -1).to(device)
         d1 = F.softmax(main_model.compute_scores(q1, set1) / T, -1).to(device)
-        mixture_d = 0.5 * (d1 + d2)
+        mixture_d = mixture_alpha*d1 + (1-mixture_alpha)*d2
         for step in range(n_steps):
             d1 = F.softmax(main_model.compute_scores(q1, set1) / T, -1).to(device)
-            other_d = mixture_d if is_mixture else d2
-            loss = loss_func(other_d, d1)
+            loss = loss_func(mixture_d, d1)
             opt.zero_grad(set_to_none=True)
             loss.backward(retain_graph=True)
             opt.step()
@@ -48,7 +47,7 @@ def optimize_queries_main(main_model, feedback_model, dataset, k, lr, n_steps, T
     return torch.stack(out_q)
 
 
-def optimize_queries_union(main_model, feedback_model, dataset, k, lr, n_steps, T, is_mixture, loss_func, device,
+def optimize_queries_union(main_model, feedback_model, dataset, k, lr, n_steps, T, mixture_alpha, loss_func, device,
                            optimizer, split: DataSplit):
     f_d, f_q_dict = feedback_model.load_embs(dataset)
     d, q, f_d, f_q = main_model.d.to(device), main_model.q_dict[split].to(device), f_d.to(device), f_q_dict[split].to(device)
@@ -68,12 +67,11 @@ def optimize_queries_union(main_model, feedback_model, dataset, k, lr, n_steps, 
         u = torch.unique(torch.cat([top_idx1[i], top_idx2[i]]))
         d1 = torch.softmax(sim1[i, u] / T, dim=-1).to(device)
         d2 = torch.softmax(sim2[i, u] / T, dim=-1).to(device)
-        mixture_d = 0.5 * (d1 + d2)
+        mixture_d = mixture_alpha*d1 + (1-mixture_alpha)*d2
         for step in range(n_steps):
             docs_u = d.index_select(0, u.to(d.device))
             d1 = F.softmax(main_model.compute_scores(qs[i], docs_u) / T, -1).to(device)
-            other_d = mixture_d if is_mixture else d2
-            loss = loss_func(other_d, d1)
+            loss = loss_func(mixture_d, d1)
             opt.zero_grad(set_to_none=True)
             loss.backward(retain_graph=True)
             opt.step()
@@ -81,7 +79,7 @@ def optimize_queries_union(main_model, feedback_model, dataset, k, lr, n_steps, 
     return torch.stack(out_q)
 
 
-def optimize_queries_union_sample(main_model, feedback_model, dataset, k, lr, n_steps, T, is_mixture, loss_func, device,
+def optimize_queries_union_sample(main_model, feedback_model, dataset, k, lr, n_steps, T, mixture_alpha, loss_func, device,
                                   optimizer, split):
     f_d, f_q_dict = feedback_model.load_embs(dataset)
     d, q, f_d, f_q = main_model.d.to(device), main_model.q_dict[split].to(device), f_d.to(device), f_q_dict[split].to(device)
@@ -101,13 +99,12 @@ def optimize_queries_union_sample(main_model, feedback_model, dataset, k, lr, n_
         u = torch.unique(torch.cat([top_idx1[i], top_idx2[i]]))
         d1 = sim1[i, u].to(device)
         d2 = sim2[i, u].to(device)
-        mixture_d = 0.5 * (d1 + d2)
+        mixture_d = mixture_alpha*d1 + (1-mixture_alpha)*d2
         for step in range(n_steps):
             indices_to_sample = torch.randperm(u.size()[0])[:10]
             docs_u = d.index_select(0, u[indices_to_sample].to(d.device))
             d1 = F.softmax(main_model.compute_scores(qs[i], docs_u) / T, -1).to(device)
-            other_d = (mixture_d[indices_to_sample] / T).softmax(-1) if is_mixture else (
-                        d2[indices_to_sample] / T).softmax(-1)
+            other_d = (mixture_d[indices_to_sample] / T).softmax(-1)
             loss = loss_func(other_d, d1)
             opt.zero_grad(set_to_none=True)
             loss.backward(retain_graph=True)
@@ -116,18 +113,18 @@ def optimize_queries_union_sample(main_model, feedback_model, dataset, k, lr, n_
     return torch.stack(out_q)
 
 
-def optimize_queries_dynamic(mod_1, mod_2, dataset, k, lr, n_steps, T, is_mixture, loss_func):
+def optimize_queries_dynamic(mod_1, mod_2, dataset, k, lr, n_steps, T, mixture_alpha, loss_func):
     # TODO not functional currently
     device = get_device()
     for _ in range(5):
         optimized_queries_1 = mod_1.optimize_queries(mod_2, dataset, k=k, lr=lr, n_steps=n_steps, T=T,
-                                                     is_mixture=is_mixture, loss_func=loss_func)
+                                                     mixture_alpha=mixture_alpha, loss_func=loss_func)
         r3, _ = mod_1.run_retrieval(dataset, q=optimized_queries_1.to(device))
         print(dataset.evaluate(r3))
         mod_1.set_queries(optimized_queries_1)
 
         optimized_queries_2 = mod_2.optimize_queries(mod_1, dataset, k=k, lr=lr, n_steps=n_steps, T=T,
-                                                     is_mixture=is_mixture, loss_func=loss_func)
+                                                     mixture_alpha=mixture_alpha, loss_func=loss_func)
         r4, _ = mod_2.run_retrieval(dataset, q=optimized_queries_2.to(device))
         print(dataset.evaluate(r4))
         mod_2.set_queries(optimized_queries_2)

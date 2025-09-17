@@ -151,17 +151,17 @@ def tune_hyper(dataset, mod_1, mod_2, device, input_params, weight_for_feedback_
 
 
 def run_query_optimizations(dataset, mod_1: Retriever, mod_2: Retriever, device, lr, k, n, t, mixture_alpha,
-                            loss_func: Callable, optimizer: torch.optim.Optimizer, optimization_func: Callable,
+                            loss_func: Callable, optimizer: torch.optim.Optimizer, optimization_func_name: str,
                             split=DataSplit.TEST):
     if mod_1.is_sparse:
         result_dict = {}
     else:
-        optimized_queries = optimization_func(
+        optimization_func = OptimizationFunctions[optimization_func_name].value
+        r = optimization_func(
             mod_1, mod_2, dataset, device=device,
             k=k, lr=lr, n_steps=n, T=t, mixture_alpha=mixture_alpha, loss_func=loss_func,
             optimizer=optimizer, split=split)
 
-        r, _ = mod_1.run_retrieval(dataset, q=optimized_queries.to(device), split=split)
         result_dict = {"run_id": f"{mod_1.id}-feedback-from-{mod_2.id}",
                        "main_model": mod_1.id,
                        "feedback_model": mod_2.id,
@@ -241,9 +241,9 @@ def main(args):
         kl_divergence,
     ]
     optimization_funcs = [
-        # OptimizationFunctions.optimize_queries_main,
-        OptimizationFunctions.optimize_queries_union,
-        # OptimizationFunctions.optimize_queries_union_sample,
+        # OptimizationFunctions.main_no_search.name,
+        OptimizationFunctions.union_no_search.name,
+        # OptimizationFunctions.union_sample_no_search.name,
     ]
 
     optimizers = [
@@ -335,7 +335,7 @@ def main(args):
                         "temp": t,
                         "mixture_alpha": mixture_alpha,
                         "loss_func": loss_func.__name__,
-                        "optimization_func": optimization_func.__name__,
+                        "optimization_func": optimization_func,
                         "optimizer": optimizer.__name__,
                         "dataset": dataset.id,
                     })

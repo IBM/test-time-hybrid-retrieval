@@ -1,8 +1,12 @@
+from enum import Enum
+from functools import partial
+from typing import Callable
+
 import torch
 import torch.nn.functional as F
 
 from dataset_configs import DataSplit
-from retriever import get_topk
+from retriever import get_topk, Retriever
 from utils import get_device, slice_sparse_coo_tensor
 
 
@@ -15,6 +19,30 @@ def kl_divergence(p, q, eps=1e-8):
     return torch.sum(p * torch.log((p + eps) / (q + eps)))
 
 
+def optimize_queries_with_search(main_model: Retriever, feedback_model: Retriever, dataset, device, split: DataSplit,
+                                 optimize_queries_func: Callable, **kwargs):
+    optimized_queries, _, _ = optimize_queries_func(
+        main_model=main_model, feedback_model=feedback_model, dataset=dataset, device=device, split=split, **kwargs)
+    r, _ = main_model.run_retrieval(dataset, q=optimized_queries.to(device), split=split)
+    return r
+
+
+def optimize_queries_no_search(main_model: Retriever, feedback_model: Retriever, dataset, device, split: DataSplit,
+                               optimize_queries_func: Callable, **kwargs):
+    optimized_queries, doc_indices_per_query, docs_per_query = optimize_queries_func(
+        main_model=main_model, feedback_model=feedback_model, dataset=dataset, device=device, split=split, **kwargs)
+
+    questions = dataset.benchmark['question']
+    q_indices = dataset.get_queries_indices(split)
+    questions = questions[q_indices.numpy()]
+    r = {}
+    for question, optimized_query, doc_indices, docs in zip(
+            questions, optimized_queries, doc_indices_per_query, docs_per_query):
+        scores = main_model.compute_scores(optimized_query.unsqueeze(0), docs)
+        r[question] = [(idx, val) for idx, val in zip(doc_indices.tolist(), scores.tolist())]
+    return r
+
+
 def optimize_queries_main(main_model, feedback_model, dataset, k, lr, n_steps, T, mixture_alpha, loss_func, device,
                           optimizer, split: DataSplit):
     f_d, f_q_dict = feedback_model.load_embs(dataset)
@@ -22,6 +50,8 @@ def optimize_queries_main(main_model, feedback_model, dataset, k, lr, n_steps, T
     d, q = main_model.d.to(device), main_model.q_dict[split].to(device)
     Q = q.size(0)
     out_q = []
+    doc_indices_per_query = []
+    docs_per_query = []
 
     qs = [q[i].unsqueeze(0).clone().detach().requires_grad_(True) for i in range(Q)]
     opt = optimizer(qs, lr=lr)  # one optimizer for all queries
@@ -30,6 +60,9 @@ def optimize_queries_main(main_model, feedback_model, dataset, k, lr, n_steps, T
         q1 = qs[q_id]
         q2 = f_q[q_id].unsqueeze(0).to(device)
         set1 = d[top_k[q_id]]
+        doc_indices_per_query.append(top_k[q_id])
+        docs_per_query.append(set1)
+
         if f_d.is_sparse:
             set2 = slice_sparse_coo_tensor(f_d, slice_indices=top_k[q_id]).to(device)
         else:
@@ -44,7 +77,8 @@ def optimize_queries_main(main_model, feedback_model, dataset, k, lr, n_steps, T
             loss.backward(retain_graph=True)
             opt.step()
         out_q.append(q1.detach().squeeze())
-    return torch.stack(out_q)
+
+    return torch.stack(out_q), doc_indices_per_query, docs_per_query
 
 
 def optimize_queries_union(main_model, feedback_model, dataset, k, lr, n_steps, T, mixture_alpha, loss_func, device,
@@ -53,6 +87,8 @@ def optimize_queries_union(main_model, feedback_model, dataset, k, lr, n_steps, 
     d, q, f_d, f_q = main_model.d.to(device), main_model.q_dict[split].to(device), f_d.to(device), f_q_dict[split].to(device)
     Q = q.size(0)
     out_q = []
+    doc_indices_per_query = []
+    docs_per_query = []
 
     qs = [q[i].unsqueeze(0).clone().detach().requires_grad_(True) for i in range(Q)]
     opt = optimizer(qs, lr=lr)  # one optimizer for all queries
@@ -65,18 +101,22 @@ def optimize_queries_union(main_model, feedback_model, dataset, k, lr, n_steps, 
 
     for i in range(Q):
         u = torch.unique(torch.cat([top_idx1[i], top_idx2[i]]))
+        docs_u = d.index_select(0, u.to(d.device))
+        doc_indices_per_query.append(u)
+        docs_per_query.append(docs_u)
+
         d1 = torch.softmax(sim1[i, u] / T, dim=-1).to(device)
         d2 = torch.softmax(sim2[i, u] / T, dim=-1).to(device)
         mixture_d = (1-mixture_alpha)*d1 + mixture_alpha*d2
         for step in range(n_steps):
-            docs_u = d.index_select(0, u.to(d.device))
             d1 = F.softmax(main_model.compute_scores(qs[i], docs_u) / T, -1).to(device)
             loss = loss_func(mixture_d, d1)
             opt.zero_grad(set_to_none=True)
             loss.backward(retain_graph=True)
             opt.step()
         out_q.append(qs[i].detach().squeeze())
-    return torch.stack(out_q)
+
+    return torch.stack(out_q), doc_indices_per_query, docs_per_query
 
 
 def optimize_queries_union_sample(main_model, feedback_model, dataset, k, lr, n_steps, T, mixture_alpha, loss_func, device,
@@ -85,6 +125,8 @@ def optimize_queries_union_sample(main_model, feedback_model, dataset, k, lr, n_
     d, q, f_d, f_q = main_model.d.to(device), main_model.q_dict[split].to(device), f_d.to(device), f_q_dict[split].to(device)
     Q = q.size(0)
     out_q = []
+    doc_indices_per_query = []
+    docs_per_query = []
 
     qs = [q[i].unsqueeze(0).clone().detach().requires_grad_(True) for i in range(Q)]
     opt = optimizer(qs, lr=lr)  # one optimizer for all queries
@@ -97,20 +139,24 @@ def optimize_queries_union_sample(main_model, feedback_model, dataset, k, lr, n_
 
     for i in range(Q):
         u = torch.unique(torch.cat([top_idx1[i], top_idx2[i]]))
+        docs_u = d.index_select(0, u.to(d.device))
+        doc_indices_per_query.append(u)
+        docs_per_query.append(docs_u)
+
         d1 = sim1[i, u].to(device)
         d2 = sim2[i, u].to(device)
         mixture_d = (1-mixture_alpha)*d1 + mixture_alpha*d2
         for step in range(n_steps):
             indices_to_sample = torch.randperm(u.size()[0])[:10]
-            docs_u = d.index_select(0, u[indices_to_sample].to(d.device))
-            d1 = F.softmax(main_model.compute_scores(qs[i], docs_u) / T, -1).to(device)
+            sample_docs_u = d.index_select(0, u[indices_to_sample].to(d.device))
+            d1 = F.softmax(main_model.compute_scores(qs[i], sample_docs_u) / T, -1).to(device)
             other_d = (mixture_d[indices_to_sample] / T).softmax(-1)
             loss = loss_func(other_d, d1)
             opt.zero_grad(set_to_none=True)
             loss.backward(retain_graph=True)
             opt.step()
         out_q.append(qs[i].detach().squeeze())
-    return torch.stack(out_q)
+    return torch.stack(out_q), doc_indices_per_query, docs_per_query
 
 
 def optimize_queries_dynamic(mod_1, mod_2, dataset, k, lr, n_steps, T, mixture_alpha, loss_func):
@@ -130,10 +176,20 @@ def optimize_queries_dynamic(mod_1, mod_2, dataset, k, lr, n_steps, T, mixture_a
         mod_2.set_queries(optimized_queries_2)
 
 
-class OptimizationFunctions:
-    optimize_queries_main = optimize_queries_main
-    optimize_queries_union = optimize_queries_union
-    optimize_queries_union_sample = optimize_queries_union_sample
+class OptimizationFunctions(Enum):
+    main_with_search = partial(optimize_queries_with_search,
+                               optimize_queries_func=optimize_queries_main)
+    union_with_search = partial(optimize_queries_with_search,
+                                optimize_queries_func=optimize_queries_union)
+    union_sample_with_search = partial(optimize_queries_with_search,
+                                       optimize_queries_func=optimize_queries_union_sample)
+
+    main_no_search = partial(optimize_queries_no_search,
+                             optimize_queries_func=optimize_queries_main)
+    union_no_search = partial(optimize_queries_no_search,
+                              optimize_queries_func=optimize_queries_union)
+    union_sample_no_search = partial(optimize_queries_no_search,
+                                     optimize_queries_func=optimize_queries_union_sample)
 
 
 def scores_feedback(main_model, feedback_model, dataset, top_k_idxs, alpha=0.5, split=DataSplit.TEST):

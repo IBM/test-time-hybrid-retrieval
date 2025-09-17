@@ -38,8 +38,8 @@ def optimize_queries_no_search(main_model: Retriever, feedback_model: Retriever,
     r = {}
     for question, optimized_query, doc_indices, docs in zip(
             questions, optimized_queries, doc_indices_per_query, docs_per_query):
-        scores = main_model.compute_scores(optimized_query.unsqueeze(0), docs)
-        r[question] = [(idx, val) for idx, val in zip(doc_indices.tolist(), scores.tolist())]
+        scores = main_model.compute_scores(optimized_query.unsqueeze(0).to(device), docs.to(device))
+        r[question] = [(idx, val) for idx, val in zip(doc_indices.cpu().tolist(), scores.cpu().tolist())]
     return r
 
 
@@ -60,8 +60,8 @@ def optimize_queries_main(main_model, feedback_model, dataset, k, lr, n_steps, T
         q1 = qs[q_id]
         q2 = f_q[q_id].unsqueeze(0).to(device)
         set1 = d[top_k[q_id]]
-        doc_indices_per_query.append(top_k[q_id])
-        docs_per_query.append(set1)
+        doc_indices_per_query.append(top_k[q_id].detach().cpu())
+        docs_per_query.append(set1.detach().cpu())
 
         if f_d.is_sparse:
             set2 = slice_sparse_coo_tensor(f_d, slice_indices=top_k[q_id]).to(device)
@@ -102,8 +102,8 @@ def optimize_queries_union(main_model, feedback_model, dataset, k, lr, n_steps, 
     for i in range(Q):
         u = torch.unique(torch.cat([top_idx1[i], top_idx2[i]]))
         docs_u = d.index_select(0, u.to(d.device))
-        doc_indices_per_query.append(u)
-        docs_per_query.append(docs_u)
+        doc_indices_per_query.append(u.detach().cpu())
+        docs_per_query.append(docs_u.detach().cpu())
 
         d1 = torch.softmax(sim1[i, u] / T, dim=-1).to(device)
         d2 = torch.softmax(sim2[i, u] / T, dim=-1).to(device)
@@ -140,8 +140,8 @@ def optimize_queries_union_sample(main_model, feedback_model, dataset, k, lr, n_
     for i in range(Q):
         u = torch.unique(torch.cat([top_idx1[i], top_idx2[i]]))
         docs_u = d.index_select(0, u.to(d.device))
-        doc_indices_per_query.append(u)
-        docs_per_query.append(docs_u)
+        doc_indices_per_query.append(u.detach().cpu())
+        docs_per_query.append(docs_u.detach().cpu())
 
         d1 = sim1[i, u].to(device)
         d2 = sim2[i, u].to(device)

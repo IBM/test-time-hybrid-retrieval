@@ -6,7 +6,7 @@ import torch
 from natsort import natsorted, ns
 
 from dataset_configs import RagDataset
-from embedding_configs import Embedders, Modality, EncoderConfig
+from embedding_configs import Embedders, Modality, EncoderConfig, all_embedders
 
 
 def load_documents(path):
@@ -48,9 +48,8 @@ def main(args):
 if __name__ == "__main__":
     from dataset_configs import REAL_MM_RAG_DATASETS, VIDORE1_DATASETS, VIDORE2_DATASETS
     parser = argparse.ArgumentParser()
-    all_models = [x for x in Embedders.__dict__.keys() if not x.startswith("_")]
     parser.add_argument('--datasets', nargs='+', default=VIDORE2_DATASETS)
-    parser.add_argument('--models', nargs='+', required=True, choices=all_models)
+    parser.add_argument('--models', nargs='+', required=True, choices=all_embedders)
     parser.add_argument('--datasets_path_prefix', default="/proj/omri/")
     parser.add_argument('--out_path')
 

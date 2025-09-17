@@ -192,6 +192,9 @@ class OptimizationFunctions(Enum):
                                      optimize_queries_func=optimize_queries_union_sample)
 
 
+all_optimization_funcs = [x for x in OptimizationFunctions.__dict__.keys() if not x.startswith("_")]
+
+
 def scores_feedback(main_model, feedback_model, dataset, top_k_idxs, alpha=0.5, split=DataSplit.TEST):
     device = get_device()
     f_d, f_q_dict = feedback_model.load_embs(dataset)

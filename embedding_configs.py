@@ -327,3 +327,6 @@ class Embedders:
                              embedder=NomicEmbedder)
     bm25 = EncoderConfig(model_id="Qdrant/bm25", modality=Modality.TEXT,
                          embedder=SparseEmbedder)
+
+
+all_embedders = [x for x in Embedders.__dict__.keys() if not x.startswith("_")]

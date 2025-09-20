@@ -1,22 +1,24 @@
+from collections import defaultdict
+
 import numpy as np
 import torch
 
 
-def reciprocal_rank_fusion(r1, r2, k=60):
+def reciprocal_rank_fusion(r1, r2, alpha=0.5, k=60):
     r = {}
     for q in r1.keys():
         curr_r1 = r1[q]
         curr_r2 = r2[q]
-        rrf_scores = {}
-        for i, ((doc1, _), (doc2, _)) in enumerate(zip(curr_r1, curr_r2)):
-            rrf_scores[doc1] = rrf_scores.get(doc1, 0) + 1 / (k + i)
-            rrf_scores[doc2] = rrf_scores.get(doc2, 0) + 1 / (k + i)
+        rrf_scores = defaultdict(int)
+        for rank, ((doc1, _), (doc2, _)) in enumerate(zip(curr_r1, curr_r2)):
+            rrf_scores[doc1] += 2*alpha / (k + rank)
+            rrf_scores[doc2] += 2*(1-alpha) / (k + rank)
         r[q] = [(doc, score)
                 for doc, score in sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)][:len(curr_r1)]
     return r
 
 
-def average_ranking_fusion(r1, r2):
+def average_ranking_fusion(r1, r2, alpha=0.5):
 
     def get_rank(doc, curr_r):
         for i, (d, s) in enumerate(curr_r):
@@ -31,7 +33,7 @@ def average_ranking_fusion(r1, r2):
         union = set([doc for doc, _ in curr_r1]).union(set([doc for doc, _ in curr_r2]))
         raw_rank_averages = {}
         for doc in union:
-            avg_rank = (get_rank(doc, curr_r1) + get_rank(doc, curr_r2))/2
+            avg_rank = alpha*get_rank(doc, curr_r1) + (1-alpha)*get_rank(doc, curr_r2)
             raw_rank_averages[doc] = avg_rank
         r[q] = [(doc, 1/(score+1e-6))
                 for doc, score in sorted(raw_rank_averages.items(), key=lambda x: x[1])][:len(curr_r1)]

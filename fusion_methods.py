@@ -10,7 +10,8 @@ def reciprocal_rank_fusion(r1, r2, alpha=0.5, k=60):
         curr_r1 = r1[q]
         curr_r2 = r2[q]
         rrf_scores = defaultdict(int)
-        for rank, ((doc1, _), (doc2, _)) in enumerate(zip(curr_r1, curr_r2)):
+        for i, ((doc1, _), (doc2, _)) in enumerate(zip(curr_r1, curr_r2)):
+            rank = i + 1
             rrf_scores[doc1] += 2*alpha / (k + rank)
             rrf_scores[doc2] += 2*(1-alpha) / (k + rank)
         r[q] = [(doc, score)
@@ -21,10 +22,10 @@ def reciprocal_rank_fusion(r1, r2, alpha=0.5, k=60):
 def average_ranking_fusion(r1, r2, alpha=0.5):
 
     def get_rank(doc, curr_r):
-        for i, (d, s) in enumerate(curr_r):
+        for i, (d, _) in enumerate(curr_r):
             if d == doc:
-                return i
-        return len(curr_r)
+                return i + 1
+        return len(curr_r) + 1
 
     r = {}
     for q in r1.keys():

@@ -69,17 +69,19 @@ def run_baselines(dataset: RagDataset, mod_1, mod_2, r1, r2, top_idx_1, top_idx_
     late_pipelines = {
         "RRF": reciprocal_rank_fusion,
         "average": average_ranking_fusion,
+        "sim_score_minmax": partial(sim_score_fusion, normal_func=normalize_min_max),
+        "sim_score_softmax": partial(sim_score_fusion, normal_func=normalize_softmax),
     }
 
     tunable_pipelines = {
-        "sim_score_minmax": partial(sim_score_fusion, normal_func=normalize_min_max),
-        "sim_score_softmax": partial(sim_score_fusion, normal_func=normalize_softmax),
         f"scores_feedback_{mod_1.id}-{mod_2.id}": partial(scores_feedback, main_model=mod_1, feedback_model=mod_2,
                                                           dataset=dataset, top_k_idxs=top_idx_1),
         f"scores_feedback_{mod_2.id}-{mod_1.id}": partial(scores_feedback, main_model=mod_2, feedback_model=mod_1,
                                                           dataset=dataset, top_k_idxs=top_idx_2),
         "weighted_average": average_ranking_fusion,
         "weighted_RRF": reciprocal_rank_fusion,
+        "weighted_sim_score_minmax": partial(sim_score_fusion, normal_func=normalize_min_max),
+        "weighted_sim_score_softmax": partial(sim_score_fusion, normal_func=normalize_softmax),
     }
 
     if args.tune:

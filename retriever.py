@@ -215,4 +215,4 @@ class Retriever:
 
         if similarity.is_sparse:
             similarity = similarity.to_dense()
-        return similarity.squeeze()
+        return similarity

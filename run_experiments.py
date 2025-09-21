@@ -94,8 +94,8 @@ def run_baselines(dataset: RagDataset, mod_1, mod_2, r1, r2, top_idx_1, top_idx_
                     best_val = eval[target_metric]
                     best_alpha = alpha
 
-                r = fusion_func(r1, r2, alpha=best_alpha)
-                run_id = f"{pipeline}-{mod_1.id}-{mod_2.id}"
+            r = fusion_func(r1, r2, alpha=best_alpha)
+            run_id = f"{pipeline}-{mod_1.id}-{mod_2.id}"
 
             results.append({
                 **info_dict,

@@ -110,7 +110,7 @@ def main():
     args = ap.parse_args()
 
     FUNC_MAP = {
-        "union": OptimizationFunctions.optimize_queries_union,
+        "union": OptimizationFunctions["union_no_search"].value,
     }
 
     device = get_device()

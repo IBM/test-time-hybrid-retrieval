@@ -19,7 +19,7 @@ from dataset_configs import Datasets, DataSplit, RagDataset
 from embedding_configs import Embedders
 from fusion_methods import average_ranking_fusion, normalize_softmax, normalize_min_max, reciprocal_rank_fusion, \
     sim_score_fusion
-from query_optimizations import OptimizationFunctions, scores_feedback, kl_divergence, js_divergence
+from query_optimizations import OptimizationFunctions, kl_divergence
 from retriever import Retriever
 from utils import get_device, get_run_hash, set_seed, on_ccc
 
@@ -74,10 +74,6 @@ def run_baselines(dataset: RagDataset, mod_1, mod_2, r1, r2, top_idx_1, top_idx_
     }
 
     tunable_pipelines = {
-        f"scores_feedback_{mod_1.id}-{mod_2.id}": partial(scores_feedback, main_model=mod_1, feedback_model=mod_2,
-                                                          dataset=dataset, top_k_idxs=top_idx_1),
-        f"scores_feedback_{mod_2.id}-{mod_1.id}": partial(scores_feedback, main_model=mod_2, feedback_model=mod_1,
-                                                          dataset=dataset, top_k_idxs=top_idx_2),
         "weighted_average": average_ranking_fusion,
         "weighted_RRF": reciprocal_rank_fusion,
         "weighted_sim_score_minmax": partial(sim_score_fusion, normal_func=normalize_min_max),
@@ -91,20 +87,13 @@ def run_baselines(dataset: RagDataset, mod_1, mod_2, r1, r2, top_idx_1, top_idx_
         for pipeline, fusion_func in tunable_pipelines.items():
             best_val, best_alpha = 0, 0
             for alpha in [0.1*i for i in range(1, 10)]:
-                if "scores_feedback" in pipeline:
-                    r = fusion_func(alpha=alpha, split=DataSplit.DEV)
-                else:
-                    r = fusion_func(r1_dev, r2_dev, alpha=alpha)
+                r = fusion_func(r1_dev, r2_dev, alpha=alpha)
 
                 eval = dataset.evaluate(r)
                 if eval[target_metric] > best_val:
                     best_val = eval[target_metric]
                     best_alpha = alpha
 
-            if "scores_feedback" in pipeline:
-                r = fusion_func(alpha=best_alpha)
-                run_id = pipeline
-            else:
                 r = fusion_func(r1, r2, alpha=best_alpha)
                 run_id = f"{pipeline}-{mod_1.id}-{mod_2.id}"
 
@@ -122,10 +111,7 @@ def run_baselines(dataset: RagDataset, mod_1, mod_2, r1, r2, top_idx_1, top_idx_
                 late_pipelines[f"{pipeline}_{alpha:.2f}-{1-alpha:.2f}"] = partial(fusion_func, alpha=alpha)
 
     for pipeline, fusion_func in late_pipelines.items():
-        if "scores_feedback" in pipeline:
-            r = fusion_func()
-        else:
-            r = fusion_func(r1, r2)
+        r = fusion_func(r1, r2)
         results.append({
             **info_dict,
             "run_id": f"{pipeline}-{mod_1.id}-{mod_2.id}",

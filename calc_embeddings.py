@@ -43,6 +43,7 @@ def main(args):
                                                   custom_out_path=args.out_path)
                 gc.collect()
                 torch.cuda.empty_cache()
+            del embedder.model
 
 
 if __name__ == "__main__":

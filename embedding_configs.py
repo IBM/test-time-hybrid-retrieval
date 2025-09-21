@@ -24,6 +24,8 @@ class Embedder:
     is_sparse: bool = False
     file_suffix = "_embeddings"
 
+    model = None
+
     def calc_and_save_embeddings(self, dataset_path: Path, docs: list[str], queries: list[str], model_id: str,
                                  custom_out_path=None):
         model_name = model_id.split("/")[1]
@@ -45,13 +47,26 @@ class Embedder:
         np.savez_compressed(docs_file, docs_embeddings)
 
     def calc_embeddings(self, model_id: str, docs: list[str], queries: list[str]):
+        if self.model is None:
+            self.load_model(model_id)
+        document_embeddings = self.calc_document_embeddings(docs)
+        query_embeddings = self.calc_query_embeddings(queries)
+        return document_embeddings, query_embeddings
+
+    def load_model(self, model_id: str):
+        raise NotImplementedError()
+
+    def calc_document_embeddings(self, docs: list[str]):
+        raise NotImplementedError()
+
+    def calc_query_embeddings(self, queries: list[str]):
         raise NotImplementedError()
 
 
 class JinaEmbedder(Embedder):
     dtype = np.float32
 
-    def calc_embeddings(self, model_id, docs, queries):
+    def load_model(self, model_id: str):
         m = importlib.import_module("transformers.modeling_flash_attention_utils")
 
         try:
@@ -66,21 +81,18 @@ class JinaEmbedder(Embedder):
         setattr(m, "apply_rotary_emb", getattr(m, "apply_rotary_emb", _apply_rotary_emb))
         setattr(m, "flash_attn_varlen_func", getattr(m, "flash_attn_varlen_func", _favf))
 
-        model = AutoModel.from_pretrained(model_id, trust_remote_code=True)
-        model.to(get_device())
+        self.model = AutoModel.from_pretrained(model_id, trust_remote_code=True)
+        self.model.to(get_device())
 
-        with torch.no_grad():
-            query_embeddings = model.encode_text(
-                texts=queries,
-                task="retrieval",
-                prompt_name="query",
-                return_multivector=self.is_multi_vector,
-            )
-            document_embeddings = self._encode_documents(model, docs)
+    def calc_query_embeddings(self, queries: list[str]):
+        query_embeddings = self.model.encode_text(
+            texts=queries,
+            task="retrieval",
+            prompt_name="query",
+            return_multivector=self.is_multi_vector,
+        )
         query_embeddings = self._convert_to_output_format(query_embeddings)
-        document_embeddings = self._convert_to_output_format(document_embeddings)
-
-        return document_embeddings, query_embeddings
+        return query_embeddings
 
     def _convert_to_output_format(self, embeddings):
         if self.is_multi_vector:
@@ -91,30 +103,31 @@ class JinaEmbedder(Embedder):
         else:
             return [e.cpu() for e in embeddings]
 
-    def _encode_documents(self, model, docs):
-        raise NotImplementedError()
-
 
 class JinaImageEmbedder(JinaEmbedder):
-    def _encode_documents(self, model, docs):
+    def calc_document_embeddings(self, docs: list[str]):
         images = [Image.open(path) for path in docs]
-        return model.encode_image(
+        document_embeddings = self.model.encode_image(
             images=images,
             task="retrieval",
             return_multivector=self.is_multi_vector,
         )
+        document_embeddings = self._convert_to_output_format(document_embeddings)
+        return document_embeddings
 
 
 class JinaTextEmbedder(JinaEmbedder):
     file_suffix = "_text_embeddings"
 
-    def _encode_documents(self, model, docs):
-        return model.encode_text(
+    def calc_document_embeddings(self, docs: list[str]):
+        document_embeddings = self.model.encode_text(
             texts=docs,
             task="retrieval",
             prompt_name="passage",
             return_multivector=self.is_multi_vector,
         )
+        document_embeddings = self._convert_to_output_format(document_embeddings)
+        return document_embeddings
 
 
 class JinaImageMultiEmbedder(JinaImageEmbedder):
@@ -131,20 +144,21 @@ class SentenceTransformersEmbedder(Embedder):
     query_extra_kwargs: dict
     doc_extra_kwargs: dict
 
-    def calc_embeddings(self, model_id, docs, queries):
+    def load_model(self, model_id):
         device = get_device()
-        model = SentenceTransformer(model_id)
-        model.max_seq_length = self.max_length
-        model.eval().half().to(device)
+        self.model = SentenceTransformer(model_id)
+        self.model.max_seq_length = self.max_length
+        self.model.eval().half().to(device)
 
-        query_embeddings = self._encode(queries, model, device, extra_kwargs=self.query_extra_kwargs)
-        document_embeddings = self._encode(docs, model, device, extra_kwargs=self.doc_extra_kwargs)
-        del model
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        return document_embeddings, query_embeddings
+    def calc_document_embeddings(self, docs):
+        return self._encode(docs, self.model, self.model.device,
+                            extra_kwargs=self.doc_extra_kwargs)
 
-    def _encode(self, texts: list[str], model: SentenceTransformer, device: str, extra_kwargs: dict = None):
+    def calc_query_embeddings(self, queries):
+        return self._encode(queries, self.model, self.model.device,
+                            extra_kwargs=self.query_extra_kwargs)
+
+    def _encode(self, texts: list[str], model: SentenceTransformer, device: torch.device, extra_kwargs: dict = None):
         extra_kwargs = extra_kwargs if extra_kwargs else {}
         out = []
         for batch_texts in tqdm(batch(texts, self.batch_size),
@@ -216,7 +230,7 @@ class NvidiaEmbedder(BatchedMultiEmbedder):
     image_batch_size = 64
     text_batch_size = 256
 
-    def calc_embeddings(self, model_id, docs, queries):
+    def load_model(self, model_id):
         model = AutoModel.from_pretrained(
             model_id,
             device_map='cuda',
@@ -225,75 +239,81 @@ class NvidiaEmbedder(BatchedMultiEmbedder):
             attn_implementation="flash_attention_2" if is_flash_attn_2_available() else None,
             revision='50c36f4d5271c6851aa08bd26d69f6e7ca8b870c'  # TODO what is this?
         ).eval()
+        self.model = model
 
+    def calc_document_embeddings(self, docs):
         img_embs = []
         with torch.no_grad():
             for batch_paths in batch(docs, self.image_batch_size):
                 imgs = [Image.open(p) for p in batch_paths]
-                emb = model.forward_passages(imgs, batch_size=len(imgs))
+                emb = self.model.forward_passages(imgs, batch_size=len(imgs))
                 img_embs.extend([t.detach().to(torch.float32).cpu().numpy() for t in self.to_list(emb)])
                 for im in imgs:
                     im.close()
+        print("concatenate imgs")
+        document_embeddings = np.concatenate(self.pad_for_concat(img_embs, pad_axis=1), axis=0)
+        return document_embeddings
 
+    def calc_query_embeddings(self, queries):
         q_embs = []
         with torch.no_grad():
             for batch_q in batch(queries, self.text_batch_size):
-                emb = model.forward_queries(batch_q, batch_size=len(batch_q))
+                emb = self.model.forward_queries(batch_q, batch_size=len(batch_q))
                 q_embs.extend([t.detach().to(torch.float32).cpu().numpy() for t in self.to_list(emb)])
-
-        print("concatenate imgs")
-        document_embeddings = np.concatenate(self.pad_for_concat(img_embs, pad_axis=1), axis=0)
         print("concatenate queries")
         query_embeddings = np.concatenate(self.pad_for_concat(q_embs, pad_axis=1), axis=0)
-
-        return document_embeddings, query_embeddings
+        return query_embeddings
 
 
 class NomicEmbedder(BatchedMultiEmbedder):
     image_batch_size = 32
     text_batch_size = 256
 
-    def calc_embeddings(self, model_id, docs, queries):
+    def load_model(self, model_id):
         from colpali_engine.models import ColQwen2_5, ColQwen2_5_Processor
-        model = ColQwen2_5.from_pretrained(
+        self.model = ColQwen2_5.from_pretrained(
             model_id,
             torch_dtype=torch.bfloat16,
             device_map="cuda:0",
             attn_implementation="flash_attention_2" if is_flash_attn_2_available() else None,
         ).eval()
-        processor = ColQwen2_5_Processor.from_pretrained(model_id)
+        self.processor = ColQwen2_5_Processor.from_pretrained(model_id)
 
+    def calc_document_embeddings(self, docs):
         img_embs = []
         with torch.no_grad():
             for batch_paths in batch(docs, self.image_batch_size):
                 imgs = [Image.open(p) for p in batch_paths]
-                processed_images = processor.process_images(imgs).to(model.device)
-                emb = model(**processed_images)
+                processed_images = self.processor.process_images(imgs).to(self.model.device)
+                emb = self.model(**processed_images)
                 img_embs.extend([t.detach().to(torch.float32).cpu().numpy() for t in self.to_list(emb)])
                 for im in imgs:
                     im.close()
+        document_embeddings = np.concatenate(self.pad_for_concat(img_embs, pad_axis=1), axis=0)
+        return document_embeddings
 
+    def calc_query_embeddings(self, queries):
         q_embs = []
         with torch.no_grad():
             for batch_q in batch(queries, self.text_batch_size):
-                processed_queries = processor.process_queries(batch_q).to(model.device)
-                emb = model(**processed_queries)
+                processed_queries = self.processor.process_queries(batch_q).to(self.model.device)
+                emb = self.model(**processed_queries)
                 q_embs.extend([t.detach().to(torch.float32).cpu().numpy() for t in self.to_list(emb)])
-
-        document_embeddings = np.concatenate(self.pad_for_concat(img_embs, pad_axis=1), axis=0)
         query_embeddings = np.concatenate(self.pad_for_concat(q_embs, pad_axis=1), axis=0)
-
-        return document_embeddings, query_embeddings
+        return query_embeddings
 
 
 class SparseEmbedder(Embedder):
     is_sparse = True
 
-    def calc_embeddings(self, model_id: str, docs: list[str], queries: list[str]):
-        model = SparseTextEmbedding(model_name=model_id)
-        document_embeddings = list(model.embed(docs))
-        query_embeddings = list(model.embed(queries))
-        return document_embeddings, query_embeddings
+    def load_model(self, model_id: str):
+        self.model = SparseTextEmbedding(model_name=model_id)
+
+    def calc_query_embeddings(self, queries: list[str]):
+        return list(self.model.embed(queries))
+
+    def calc_document_embeddings(self, docs: list[str]):
+        return list(self.model.embed(docs))
 
 
 class Modality(Enum):
@@ -329,4 +349,4 @@ class Embedders:
                          embedder=SparseEmbedder)
 
 
-all_embedders = [x for x in Embedders.__dict__.keys() if not x.startswith("_")]
+all_embedders: list[str] = [x for x in Embedders.__dict__.keys() if not x.startswith("_")]

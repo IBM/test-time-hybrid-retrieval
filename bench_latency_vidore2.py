@@ -121,7 +121,8 @@ def main():
 
     embedder_cfgs: list[EncoderConfig] = [getattr(Embedders, m) for m in args.embedders]
     retrievers = [Retriever(cfg) for cfg in embedder_cfgs]
-    os.makedirs(args.out_dir, exist_ok=True)
+    out_dir = os.path.join("output", "latency", args.out_dir)
+    os.makedirs(out_dir, exist_ok=True)
     runner = SimpleRunner()
 
     meta = {
@@ -144,6 +145,20 @@ def main():
             embedder_cfg1 = embedder_cfgs[i]
             embedder1 = embedder_cfg1.embedder()
 
+            # bench embedding of queries
+            embedder1.load_model(model_id=embedder_cfg1.model_id)
+            for _ in range(args.values):
+                sampled_query = draw_random_query(dataset)
+                runner.bench(
+                    f"calc_embeddings[{dataset.id}][{mod1.id}]",
+                    partial(embedder1.calc_query_embeddings, queries=sampled_query),
+                    group=f"{mod1.id}_embed",
+                    dataset_id=dataset.id,
+                )
+            del embedder1.model
+            if hasattr(embedder1, 'processor'):  # nomic
+                del embedder1.processor
+
             for j in range(i + 1, len(retrievers)):
                 mod2 = retrievers[j]
                 if not _is_text(mod2):
@@ -153,19 +168,6 @@ def main():
                 embedder2 = embedder_cfg2.embedder()
 
                 # bench embedding of queries
-                embedder1.load_model(model_id=embedder_cfg1.model_id)
-                for _ in range(args.values):
-                    sampled_query = draw_random_query(dataset)
-                    runner.bench(
-                        f"calc_embeddings[{dataset.id}][{mod1.id}]",
-                        partial(embedder1.calc_query_embeddings, queries=sampled_query),
-                        group=f"{mod1.id}_embed",
-                        dataset_id=dataset.id,
-                    )
-                del embedder1.model
-                if hasattr(embedder1, 'processor'):  # nomic
-                    del embedder1.processor
-
                 embedder2.load_model(model_id=embedder_cfg2.model_id)
                 for _ in range(args.values):
                     sampled_query = draw_random_query(dataset)
@@ -256,7 +258,7 @@ def main():
 
     if runner.results:
         runner.aggregate(replace=True)
-        out_json = os.path.join(args.out_dir, "suite.json")
+        out_json = os.path.join(out_dir, "suite.json")
         runner.dump(out_json, extra_meta=meta)
     else:
         print(f"No latency results calculated (embedders: {args.embedders})")

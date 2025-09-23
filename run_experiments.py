@@ -184,15 +184,15 @@ def main(args):
     benchmarks = {"vidore1": vidore1, "vidore2": vidore2, "real_mm_rag": real_mm_rag}
 
     models_in_experiment = [
-        # Embedders.nvidia,
-        # Embedders.jina_multi,
+        Embedders.nvidia,
+        Embedders.jina_multi,
         # Embedders.jina_single,
         Embedders.colnomic,
 
-        # Embedders.jina_text_single,
-        # Embedders.jina_text_multi,
         Embedders.linq,
         Embedders.qwen_text,
+        Embedders.jina_text_multi,
+        # Embedders.jina_text_single,
         # Embedders.bm25,
     ]
 
@@ -201,15 +201,11 @@ def main(args):
         datasets_in_experiment += benchmarks[k]
 
     lrs = [
-        5e-6,
         1e-5,
-        3e-5,
         5e-5,
         1e-4,
-        3e-4,
         5e-4,
         1e-3,
-        3e-3,
         5e-3,
     ]
     ks = [
@@ -218,14 +214,15 @@ def main(args):
         # 50,
     ]
     n_steps = [
-        # 10,
-        # 25,
+        10,
+        25,
         50,
         # 100
     ]
     Ts = [1]
     mixture = [
-        "dynamic"
+        # "dynamic"
+        0.5,
     ]
     loss_funcs = [
         kl_divergence,

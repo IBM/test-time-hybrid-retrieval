@@ -55,7 +55,7 @@ def optimize_queries_main(main_model, feedback_model, dataset, k, lr, n_steps, T
 
     qs = [q[i].unsqueeze(0).clone().detach().requires_grad_(True) for i in range(Q)]
     opt = optimizer(qs, lr=lr)  # one optimizer for all queries
-    top_k = get_topk(d, q, k, is_multi=main_model.is_multi)[1].squeeze()
+    top_k = get_topk(d, q, k, is_multi=main_model.is_multi)[1]
     for q_id in range(Q):
         q1 = qs[q_id]
         q2 = f_q[q_id].unsqueeze(0).to(device)

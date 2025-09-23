@@ -233,7 +233,7 @@ class NvidiaEmbedder(BatchedMultiEmbedder):
     def load_model(self, model_id):
         model = AutoModel.from_pretrained(
             model_id,
-            device_map='cuda',
+            device_map=get_device(),
             trust_remote_code=True,
             torch_dtype=torch.bfloat16,
             attn_implementation="flash_attention_2" if is_flash_attn_2_available() else None,
@@ -274,7 +274,7 @@ class NomicEmbedder(BatchedMultiEmbedder):
         self.model = ColQwen2_5.from_pretrained(
             model_id,
             torch_dtype=torch.bfloat16,
-            device_map="cuda:0",
+            device_map=get_device(),
             attn_implementation="flash_attention_2" if is_flash_attn_2_available() else None,
         ).eval()
         self.processor = ColQwen2_5_Processor.from_pretrained(model_id)

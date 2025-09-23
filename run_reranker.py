@@ -13,6 +13,7 @@ import torch
 from PIL import Image
 from tqdm import tqdm
 from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+from transformers.utils import is_flash_attn_2_available
 
 from bench_latency_vidore2 import sync_accel
 from dataset_configs import Datasets, RagDataset, DataSplit
@@ -53,7 +54,7 @@ class MonoQwenReranker(Reranker):
         self.model = Qwen2VLForConditionalGeneration.from_pretrained(
             self.model_id,
             device_map=get_device(),
-            attn_implementation="flash_attention_2",
+            attn_implementation="flash_attention_2" if is_flash_attn_2_available() else None,
             torch_dtype=torch.bfloat16,
         )
 

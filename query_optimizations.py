@@ -39,7 +39,7 @@ def optimize_queries_no_search(main_model: Retriever, feedback_model: Retriever,
     for question, optimized_query, doc_indices, docs in zip(
             questions, optimized_queries, doc_indices_per_query, docs_per_query):
         scores = main_model.compute_scores(optimized_query.unsqueeze(0).to(device), docs.to(device))
-        r[question] = [(idx, val) for idx, val in zip(doc_indices.cpu().tolist(), scores.cpu().tolist())]
+        r[question] = [(idx, val) for idx, val in zip(doc_indices.cpu().tolist(), scores.squeeze().cpu().tolist())]
     return r
 
 

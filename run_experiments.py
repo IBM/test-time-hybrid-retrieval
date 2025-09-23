@@ -144,18 +144,18 @@ def run_query_optimizations(dataset, mod_1: Retriever, mod_2: Retriever, device,
                             loss_func: Callable, optimizer: torch.optim.Optimizer, optimization_func_name: str,
                             split=DataSplit.TEST):
     if mod_1.is_sparse:
-        result_dict = {}
-    else:
-        optimization_func = OptimizationFunctions[optimization_func_name].value
-        r = optimization_func(
-            mod_1, mod_2, dataset, device=device,
-            k=k, lr=lr, n_steps=n, T=t, mixture_alpha=mixture_alpha, loss_func=loss_func,
-            optimizer=optimizer, split=split)
+        raise NotImplementedError()
 
-        result_dict = {"run_id": f"{mod_1.id}-feedback-from-{mod_2.id}",
-                       "main_model": mod_1.id,
-                       "feedback_model": mod_2.id,
-                       "metrics": dataset.evaluate(r)}
+    optimization_func = OptimizationFunctions[optimization_func_name].value
+    r = optimization_func(
+        mod_1, mod_2, dataset, device=device,
+        k=k, lr=lr, n_steps=n, T=t, mixture_alpha=mixture_alpha, loss_func=loss_func,
+        optimizer=optimizer, split=split)
+
+    result_dict = {"run_id": f"{mod_1.id}-feedback-from-{mod_2.id}",
+                    "main_model": mod_1.id,
+                    "feedback_model": mod_2.id,
+                    "metrics": dataset.evaluate(r)}
 
     return result_dict
 
@@ -277,20 +277,26 @@ def main(args):
                             mod_1_weight = res_dict["weight"]
 
                 exp_results = []
-                input_params = [(lr, k, n, t, mixture_alpha, loss_func, optimizer, optimization_func)
-                                for lr, k, n, t, mixture_alpha, loss_func, optimizer, optimization_func,
-                                in product(lrs, ks, n_steps, Ts, mixture, loss_funcs, optimizers, optimization_funcs)]
-
-                if args.tune and len(input_params) > 1:
-                    mod_1_best_params = tune_hyper(dataset, mod_1, mod_2, device, input_params,
-                                                   weight_for_feedback_model=1-mod_1_weight)
-                    mod_2_best_params = tune_hyper(dataset, mod_2, mod_1, device, input_params,
-                                                   weight_for_feedback_model=mod_1_weight)
-                    input_params = [(dataset, mod_1, mod_2, device, *mod_1_best_params),
-                                    (dataset, mod_2, mod_1, device, *mod_2_best_params)]
-                else:
-                    input_params = [(dataset, mod_1, mod_2, device, *params) for params in input_params] + \
-                                    [(dataset, mod_2, mod_1, device, *params) for params in input_params]
+                param_combinations = [
+                    (lr, k, n, t, mixture_alpha, loss_func, optimizer, optimization_func)
+                    for lr, k, n, t, mixture_alpha, loss_func, optimizer, optimization_func,
+                    in product(lrs, ks, n_steps, Ts, mixture, loss_funcs, optimizers, optimization_funcs)]
+                
+                input_params = []
+                for primary_model, aux_model, feedback_weight in [(mod_1, mod_2, 1-mod_1_weight),
+                                                                  (mod_2, mod_1, mod_1_weight)]:
+                    if primary_model.is_sparse:
+                        continue
+                    
+                    if args.tune and len(param_combinations) > 1:
+                        best_params = tune_hyper(dataset, primary_model, aux_model, device, param_combinations,
+                                                 weight_for_feedback_model=feedback_weight)
+                        input_params.append(
+                            (dataset, primary_model, aux_model, device, *best_params)
+                        )
+                    else:
+                        input_params.extend([(dataset, primary_model, aux_model, device, *params)
+                                             for params in param_combinations])
 
                 description = f"Running all query optimizations for pair {mod_1.id},{mod_2.id} (parallelization={args.use_parallelization})"
                 if args.use_parallelization:

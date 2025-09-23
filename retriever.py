@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 from dataset_configs import DataSplit, RagDataset
 from embedding_configs import EncoderConfig
-from utils import get_device
+from utils import get_device, slice_sparse_coo_tensor
 
 
 def score_multi_vector(
@@ -109,9 +109,17 @@ class Retriever:
         self.d = d
         assert q.size(0) == dataset.num_queries, \
             "the number of query embeddings doesn't match the the number of queries in the dataset"
-        dev_q = q[dataset.get_queries_indices(split=DataSplit.DEV)]
-        test_q = q[dataset.get_queries_indices(split=DataSplit.TEST)]
-        self.q_dict = {DataSplit.DEV: dev_q, DataSplit.TEST: test_q}
+        
+        dev_q_idxs = dataset.get_queries_indices(split=DataSplit.DEV)
+        test_q_idxs = dataset.get_queries_indices(split=DataSplit.TEST)
+        if self.is_sparse:
+            dev_q = slice_sparse_coo_tensor(q, dev_q_idxs)
+            test_q = slice_sparse_coo_tensor(q, test_q_idxs)
+        else:
+            dev_q = q[dev_q_idxs]
+            test_q = q[test_q_idxs]
+        self.q_dict = {DataSplit.DEV: dev_q,
+                       DataSplit.TEST: test_q}
         self._emb_cache[key] = (self.d, self.q_dict)
         return self.d, self.q_dict
 

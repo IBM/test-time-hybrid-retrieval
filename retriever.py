@@ -189,13 +189,13 @@ class Retriever:
         B = build_sparse(all_indices_b, all_values_b, len(b))
         return A, B
 
-    def run_retrieval(self, dataset, q=None, d=None, split=DataSplit.TEST):
+    def run_retrieval(self, dataset, q=None, d=None, split=DataSplit.TEST,k=50):
         device = get_device()
         if q is None:
             q = self.q_dict[split].to(device)
         if d is None:
             d = self.d.to(device)
-        top_vals, top_idx = get_topk(d, q, k=50, is_multi=self.is_multi)
+        top_vals, top_idx = get_topk(d, q, k=k, is_multi=self.is_multi)
         results = {}
         questions = dataset.benchmark['question']
         q_indices = dataset.get_queries_indices(split)

@@ -36,6 +36,8 @@ class Datasets:
     TechSlides = 'REAL-MM-RAG/TechSlides/'
 
 
+
+
 VIDORE1_DATASETS = [
     Datasets.arxivqa,
     Datasets.docvqa,
@@ -79,7 +81,7 @@ class RagDataset:
         self.num_queries = len(self.benchmark)
 
     def get_benchmark_obj(self) -> pd.DataFrame:
-        csv_fp = self.path / "images" / "benchmark" / "benchmark.csv"
+        csv_fp = self.path / "benchmark" / "benchmark.csv"
         df = pd.read_csv(
             csv_fp,
             converters={"correct_answer_document_ids": ast.literal_eval},

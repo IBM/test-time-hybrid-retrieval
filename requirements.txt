@@ -1,0 +1,12 @@
+transformers[torch]==4.53.3
+pandas==2.3.1
+datasets==4.0.0
+sentence_transformers==5.1.0
+fastembed==0.7.2
+docling==2.34
+colpali_engine==0.3.12
+opencv-python==4.12.0.88
+pillow==11.3.0
+natsort==8.4.0
+pytrec_eval==0.5
+#flash_attn==2.8.3 # needs cuda to install

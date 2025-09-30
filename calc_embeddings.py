@@ -51,7 +51,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--datasets', nargs='+', default=VIDORE2_DATASETS)
     parser.add_argument('--models', nargs='+', required=True, choices=all_embedders)
-    parser.add_argument('--datasets_path_prefix', default="/proj/omri/")
+    parser.add_argument('--datasets_path_prefix', default='')
     parser.add_argument('--out_path')
 
     main_args = parser.parse_args()

@@ -20,7 +20,7 @@ from fusion_methods import (
     normalize_softmax,
 )
 from retriever import Retriever
-from utils import get_device, set_seed, on_ccc
+from utils import get_device, set_seed
 from query_optimizations import OptimizationFunctions, kl_divergence, all_optimization_funcs
 
 
@@ -106,12 +106,12 @@ def main():
                     default=[OptimizationFunctions.union_no_search.name])
     ap.add_argument("--opt_steps", nargs="+", default=[25], type=int)
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument('--datasets_path_prefix', default='')
     ap.add_argument("--out_dir", default="latency_results_vidore2")
     args = ap.parse_args()
 
     device = get_device()
     set_seed(args.seed)
-    prefix = "/proj/omri/" if on_ccc() else ""
     vidore2 = [
         Datasets.esg_reports_v2,
         Datasets.biomedical_lectures_v2,
@@ -135,7 +135,7 @@ def main():
     }
 
     for ds in tqdm(vidore2):
-        dataset = RagDataset(ds, prefix=prefix)
+        dataset = RagDataset(ds, prefix=args.datasets_path_prefix)
 
         for i in range(len(retrievers) - 1):
             mod1 = retrievers[i]

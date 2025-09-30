@@ -19,7 +19,7 @@ from bench_latency_vidore2 import sync_accel
 from dataset_configs import Datasets, RagDataset, DataSplit
 from embedding_configs import Embedders
 from retriever import Retriever
-from utils import get_device, set_seed, on_ccc
+from utils import get_device, set_seed
 
 
 class Reranker:
@@ -92,7 +92,6 @@ class MonoQwenReranker(Reranker):
 
 
 def main(args):
-    prefix = "/proj/omri/" if on_ccc() else ""
     split = DataSplit.TEST
 
     vidore2 = [
@@ -128,7 +127,7 @@ def main(args):
     rows = []
     for dataset_name in datasets_in_experiment:
         set_seed()
-        dataset = RagDataset(dataset_name, prefix=prefix)
+        dataset = RagDataset(dataset_name, prefix=args.datasets_path_prefix)
         q_idx = dataset.get_queries_indices(split=split)
         questions_all = dataset.get_benchmark_obj()['question']
         queries = questions_all.iloc[q_idx].reset_index(drop=True)
@@ -164,7 +163,7 @@ def main(args):
                     doc_ids_to_rerank = top_idx_1[q_id][:k]
                     scores = []
                     for doc_id in doc_ids_to_rerank:
-                        doc = f"{prefix}{dataset_name}/images/{doc_id}.jpg"
+                        doc = f"{args.datasets_path_prefix}{dataset_name}/images/{doc_id}.jpg"
                         score = reranker.score_document_relevance(query, doc)
                         scores.append(score)
                     
@@ -212,6 +211,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument('--datasets_path_prefix', default='')
     parser.add_argument('-o', '--out_dir_suffix', default='reranking')
 
     args = parser.parse_args()

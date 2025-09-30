@@ -153,16 +153,15 @@ def run_query_optimizations(dataset, mod_1: Retriever, mod_2: Retriever, device,
         optimizer=optimizer, split=split)
 
     result_dict = {"run_id": f"{mod_1.id}-feedback-from-{mod_2.id}",
-                    "main_model": mod_1.id,
-                    "feedback_model": mod_2.id,
-                    "metrics": dataset.evaluate(r)}
+                   "main_model": mod_1.id,
+                   "feedback_model": mod_2.id,
+                   "metrics": dataset.evaluate(r)}
 
     return result_dict
 
 
 def main(args):
     device = get_device()
-    prefix = "/proj/omri/" if on_ccc() else ""
 
     # benchmarks
     vidore1 = [Datasets.arxivqa, Datasets.docvqa, Datasets.infovqa, Datasets.tabfquad, Datasets.tatdqa,
@@ -245,7 +244,7 @@ def main(args):
     rows = []
     for dataset_name in datasets_in_experiment:
         set_seed()
-        dataset = RagDataset(dataset_name, prefix=prefix)
+        dataset = RagDataset(dataset_name, prefix=args.datasets_path_prefix)
         for i in range(len(models_in_experiment) - 1):
             mod_1 = models_in_experiment[i]
 
@@ -376,6 +375,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--benchmarks', nargs='+', required=True)
+    parser.add_argument('--datasets_path_prefix', default='')
     parser.add_argument('-p', '--use_parallelization', type=ast.literal_eval, default=False)
     parser.add_argument('-t', '--tune', type=ast.literal_eval, default=False)
     parser.add_argument('-o', '--out_dir_suffix', default='')

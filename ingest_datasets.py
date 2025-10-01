@@ -149,7 +149,7 @@ def run_docling():
 
 if __name__ == "__main__":
     from dataset_configs import VIDORE1_DATASETS, VIDORE2_DATASETS
-    for dataset in VIDORE2_DATASETS:
+    for dataset in [*VIDORE1_DATASETS,*VIDORE2_DATASETS]:
         dataset_name, subset_name = dataset.split("/")
         dataset_hf_id = f"vidore/{subset_name}"
         download_hf_queries(dataset_hf_id, out_dir=Path(dataset_name) / subset_name / "benchmark")

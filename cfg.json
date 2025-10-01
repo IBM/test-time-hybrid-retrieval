@@ -1,0 +1,10 @@
+{
+    "lrs": [1e-5, 5e-5, 1e-4, 5e-4, 1e-3, 5e-3],
+    "ks": [10],
+    "n_steps": [10, 25, 50],
+    "Ts": [1],
+    "mixture": [0.5],
+    "loss_funcs": ["kl_divergence"],
+    "optimization_funcs": ["union_no_search"],
+    "optimizers": ["Adam"]
+  }

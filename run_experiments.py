@@ -16,7 +16,7 @@ import torch
 import tqdm
 
 from dataset_configs import Datasets, DataSplit, RagDataset
-from embedding_configs import Embedders
+from embedding_configs import Embedders, all_embedders
 from fusion_methods import average_ranking_fusion, normalize_softmax, normalize_min_max, reciprocal_rank_fusion, \
     sim_score_fusion
 from query_optimizations import OptimizationFunctions, kl_divergence
@@ -162,78 +162,42 @@ def run_query_optimizations(dataset, mod_1: Retriever, mod_2: Retriever, device,
 
 def main(args):
     device = get_device()
-
-    # benchmarks
-    vidore1 = [Datasets.arxivqa, Datasets.docvqa, Datasets.infovqa, Datasets.tabfquad, Datasets.tatdqa,
-               Datasets.shiftproject, Datasets.artificial_intelligence, Datasets.energy_test,
-               Datasets.government_reports, Datasets.healthcare]
-    vidore2 = [
-        Datasets.esg_reports_v2,
-        Datasets.biomedical_lectures_v2,
-        Datasets.economics_reports_v2,
-        Datasets.esg_reports_human_labeled_v2
-    ]
-
-    benchmarks = {"vidore1": vidore1, "vidore2": vidore2}
-
-    models_in_experiment = [
-        Embedders.nvidia,
-        Embedders.jina_multi,
-        # Embedders.jina_single,
-        Embedders.colnomic,
-
-        Embedders.linq,
-        Embedders.qwen_text,
-        Embedders.jina_text_multi,
-        # Embedders.jina_text_single,
-        # Embedders.bm25,
-    ]
+    from dataset_configs import VIDORE1_DATASETS, VIDORE2_DATASETS
+    benchmarks = {"vidore1": VIDORE1_DATASETS, "vidore2": VIDORE2_DATASETS}
+    models = {
+        "nvidia": Embedders.nvidia,
+        "jina_multi": Embedders.jina_multi,
+        "jina_single": Embedders.jina_single,
+        "colnomic": Embedders.colnomic,
+        "linq": Embedders.linq,
+        "qwen_text": Embedders.qwen_text,
+        "jina_text_multi": Embedders.jina_text_multi,
+        "jina_text_single": Embedders.jina_text_single,
+        "bm25": Embedders.bm25,
+    }
 
     datasets_in_experiment = []
     for k in args.benchmarks:
         datasets_in_experiment += benchmarks[k]
+    models_in_experiment = []
+    for k in args.models:
+        models_in_experiment.append(models[k])
 
-    lrs = [
-        1e-5,
-        5e-5,
-        1e-4,
-        5e-4,
-        1e-3,
-        5e-3,
-    ]
-    ks = [
-        10,
-        # 20
-        # 50,
-    ]
-    n_steps = [
-        10,
-        25,
-        50,
-        # 100
-    ]
-    Ts = [1]
-    mixture = [
-        # "dynamic"
-        0.5,
-    ]
-    loss_funcs = [
-        kl_divergence,
-    ]
-    optimization_funcs = [
-        # OptimizationFunctions.main_no_search.name,
-        OptimizationFunctions.union_no_search.name,
-        # OptimizationFunctions.union_sample_no_search.name,
-    ]
-
-    optimizers = [
-        torch.optim.Adam,
-        # torch.optim.AdamW,
-        # torch.optim.Adagrad,
-        # torch.optim.SGD,
-        # torch.optim.RMSprop
-        ]
-
+    if args.hyper_config:
+        with open(args.hyper_config, 'r') as f:
+            cfg = json.load(f)
+        lrs = cfg.get('lrs')
+        ks = cfg.get('ks')
+        n_steps = cfg.get('n_steps')
+        Ts = cfg.get('Ts')
+        mixture = cfg.get('mixture')
+        if 'loss_funcs' in cfg:
+            loss_funcs = [globals()[name] for name in cfg['loss_funcs']]
+        if 'optimization_funcs' in cfg:
+            optimization_funcs = [OptimizationFunctions[name].name for name in cfg['optimization_funcs']]
+        if 'optimizers' in cfg:
+            optimizers = [getattr(torch.optim, name) for name in cfg['optimizers']]
+    
     models_in_experiment = [Retriever(m) for m in models_in_experiment]
     h = get_run_hash(models_in_experiment, datasets_in_experiment, lrs, ks, n_steps, Ts, mixture,
                      loss_funcs, optimizers, optimization_funcs)
@@ -374,7 +338,9 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument('--models', nargs='+', required=True)
     parser.add_argument('--benchmarks', nargs='+', required=True)
+    parser.add_argument('--hyper_config', type=str, default='cfg.json')
     parser.add_argument('--datasets_path_prefix', default='')
     parser.add_argument('-p', '--use_parallelization', type=ast.literal_eval, default=False)
     parser.add_argument('-t', '--tune', type=ast.literal_eval, default=False)

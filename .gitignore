@@ -138,7 +138,6 @@ volumes
 
 *.npz
 *.csv
-*.json
 *.png
 *.jpg
 *.txt

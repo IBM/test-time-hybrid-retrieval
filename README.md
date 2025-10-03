@@ -37,64 +37,73 @@ The repository is organized into several key components:
 
 ## ⚙️ Setup and Installation
 1. Clone the repository:
-
+```bash
  git clone https://github.com/IBM/test-time-hybrid-retrieval.git
- 
  cd test-time-hybrid-retrieval
+ ```
 
 2. Create and activate a virtual environment (recommended)
 
 3. Install the project requirements:
 
- pip Install -r requirements.txt
+```
+ pip install -r requirements.txt
+```
 
 4. For optimal performance on supported hardware, it is highly recommended to install flash-attention:
 
+```
  pip install flash-attn 
+```
 
 ## ▶️ Usage and Workflow
 Follow these steps to replicate the experiments.
 ### Step 1: Ingest and Process Datasets
 First, download the required datasets from the Hugging Face Hub. The script uses [docling](https://github.com/docling-project/docling) to convert document images into markdown text for text-based encoders.
 
- `python ingest_datasets.py` - This will create directories (e.g., Vidore1/, Vidore2/) containing the datasets, benchmarks, images, and ingested texts.
+`python ingest_datasets.py` - This will create directories (e.g., Vidore1/, Vidore2/) containing the datasets, benchmarks, images, and ingested texts.
 
 ### Step 2: Pre-compute Embeddings
 Next, pre-compute the document and query embeddings for all models you wish to experiment with.
 Specify the models using the `--models` argument and the datasets with `—datasets`.
-Example for calculating embeddings for multiple models on Vidore2 datasets
 
- `python calc_embeddings.py \
+Example for calculating embeddings for multiple models on Vidore2 datasets:
+
+```bash
+python calc_embeddings.py \
     --models nvidia colnomic jina_multi qwen_text linq \
-    --datasets Vidore2/esg_reports_v2 Vidore2/biomedical_lectures_v2 Vidore2/economics_reports_v2 Vidore2/esg_reports_human_labeled_v2`
+    --datasets Vidore2/esg_reports_v2 Vidore2/biomedical_lectures_v2 Vidore2/economics_reports_v2 Vidore2/esg_reports_human_labeled_v2
+```
 
 This will create *_embeddings subdirectories inside each dataset folder.
 
-**Note** - Some models that were used in the paper require specific versions of some packages in order to calculate embeddings. For the most up-to-date information, it is best to check the HF page for each model before using it: [Llama-Nemo](https://huggingface.co/nvidia/llama-nemoretriever-colembed-3b-v1), [ColNomic](https://huggingface.co/nomic-ai/colnomic-embed-multimodal-7b), [Jina-v4](https://huggingface.co/jinaai/jina-embeddings-v4), [Linq-Embed](https://huggingface.co/Linq-AI-Research/Linq-Embed-Mistral), [Qwen3-4B](https://huggingface.co/Qwen/Qwen3-Embedding-4B)
+**Note**: Some models that were used in the paper require specific versions of some packages in order to calculate embeddings. For the most up-to-date information, it is best to check the HF page for each model before using it: [Llama-Nemo](https://huggingface.co/nvidia/llama-nemoretriever-colembed-3b-v1), [ColNomic](https://huggingface.co/nomic-ai/colnomic-embed-multimodal-7b), [Jina-v4](https://huggingface.co/jinaai/jina-embeddings-v4), [Linq-Embed](https://huggingface.co/Linq-AI-Research/Linq-Embed-Mistral), [Qwen3-4B](https://huggingface.co/Qwen/Qwen3-Embedding-4B).
 
 ### Step 3: Run Retrieval Experiments
 `run_experiments.py` is the main script to evaluate the hybrid retrieval and query optimization methods. The args for the script are:
 
---models: Specify which models to run (nvidia, jina_multi, colnomic, Linq, qwen_text, jina_text_multi)
+`--models`: Specify which models to run (`nvidia`, `jina_multi`, `colnomic`, `linq`, `qwen_text`, `jina_text_multi`)
 
---benchmarks: Specify which benchmark sets to run on (vidore1, vidore2).
+`--benchmarks`: Specify which benchmark sets to run on (`vidore1`, `vidore2`).
 
---hyper_config: Path to the config file with hyperparameters grid for tuning.
+`--hyper_config`: Path to the config file with hyperparameters grid for tuning.
 
---datasets_path_prefix: Path to the datasets directory on your machine.
+`--datasets_path_prefix`: Path to the datasets directory on your machine.
 
---tune: Set to True to perform hyperparameter tuning on a dev split. If False, it runs all combinations.
+`--tune`: Set to True to perform hyperparameter tuning on a dev split. If False, it runs all combinations.
 
--p, --use_parallelization: Set to True to parallelize experiments across CPU cores.
+`-p`, `--use_parallelization`: Set to True to parallelize experiments across CPU cores.
 
--o, --out_dir_suffix: An optional suffix for the output directory name.
+`-o`, `--out_dir_suffix`: An optional suffix for the output directory name.
 
-Example: Run experiments on Vidore2 with hyperparameter tuning:
-`python run_experiments.py \
+**Example:** Run experiments on Vidore2 with hyperparameter tuning:
+```bash
+python run_experiments.py \
     --models colnomic linq \
     --benchmarks vidore2 \
     --tune True \
-    -o "vidore2_tuned_run"`
+    -o "vidore2_tuned_run"
+```
 
 ### 📊 Results
 The output of the experiments will be saved in the output/ directory.

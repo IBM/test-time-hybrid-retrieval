@@ -9,4 +9,5 @@ opencv-python==4.12.0.88
 pillow==11.3.0
 natsort==8.4.0
 pytrec_eval==0.5
+dacite==1.9.2
 #flash_attn==2.8.3 # needs cuda to install

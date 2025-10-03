@@ -53,6 +53,9 @@ VIDORE2_DATASETS = [
 ]
 
 
+BENCHMARKS = {'vidore1': VIDORE1_DATASETS, 'vidore2': VIDORE2_DATASETS}
+
+
 class RagDataset:
 
     def __init__(self, path, prefix, dev_size=0.1):

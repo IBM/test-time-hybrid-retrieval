@@ -4,22 +4,25 @@ import gc
 import json
 import os
 from collections import defaultdict
+from dataclasses import asdict, dataclass
 from itertools import product
 from functools import partial
 from multiprocessing import Pool, cpu_count
 from multiprocessing.pool import ThreadPool
-from typing import Callable
+from typing import Callable, Type
 
+import dacite
 import numpy as np
 import pandas as pd
 import torch
 import tqdm
 
-from dataset_configs import Datasets, DataSplit, RagDataset
+import query_optimizations
+from dataset_configs import DataSplit, RagDataset, BENCHMARKS
 from embedding_configs import Embedders, all_embedders
 from fusion_methods import average_ranking_fusion, normalize_softmax, normalize_min_max, reciprocal_rank_fusion, \
     sim_score_fusion
-from query_optimizations import OptimizationFunctions, kl_divergence
+from query_optimizations import OptimizationFunctions
 from retriever import Retriever
 from utils import get_device, get_run_hash, set_seed, on_ccc
 
@@ -141,12 +144,11 @@ def tune_hyper(dataset, mod_1, mod_2, device, input_params, weight_for_feedback_
 
 
 def run_query_optimizations(dataset, mod_1: Retriever, mod_2: Retriever, device, lr, k, n, t, mixture_alpha,
-                            loss_func: Callable, optimizer: torch.optim.Optimizer, optimization_func_name: str,
+                            loss_func: Callable, optimizer: torch.optim.Optimizer, optimization_func: Callable,
                             split=DataSplit.TEST):
     if mod_1.is_sparse:
         raise NotImplementedError()
 
-    optimization_func = OptimizationFunctions[optimization_func_name].value
     r = optimization_func(
         mod_1, mod_2, dataset, device=device,
         k=k, lr=lr, n_steps=n, T=t, mixture_alpha=mixture_alpha, loss_func=loss_func,
@@ -160,47 +162,51 @@ def run_query_optimizations(dataset, mod_1: Retriever, mod_2: Retriever, device,
     return result_dict
 
 
+@dataclass
+class ExperimentParams:
+    lrs: list[float]
+    ks: list[int]
+    n_steps: list[int]
+    Ts: list[float]
+    mixture: list[float]
+    loss_funcs: list[Callable]
+    optimizers: list[Type[torch.optim.Optimizer]]
+    optimization_funcs: list[partial]
+
+
+def load_parameters(raw_cfg) -> ExperimentParams:
+    converters = {
+        Callable: lambda name: getattr(query_optimizations, name),
+        Type[torch.optim.Optimizer]: lambda name: getattr(torch.optim, name),
+        partial: lambda name: OptimizationFunctions[name].value
+    }
+
+    config = dacite.from_dict(
+        data_class=ExperimentParams, data=raw_cfg,
+        config=dacite.Config(type_hooks=converters),
+    )
+    return config
+
+
 def main(args):
     device = get_device()
-    from dataset_configs import VIDORE1_DATASETS, VIDORE2_DATASETS
-    benchmarks = {"vidore1": VIDORE1_DATASETS, "vidore2": VIDORE2_DATASETS}
-    models = {
-        "nvidia": Embedders.nvidia,
-        "jina_multi": Embedders.jina_multi,
-        "jina_single": Embedders.jina_single,
-        "colnomic": Embedders.colnomic,
-        "linq": Embedders.linq,
-        "qwen_text": Embedders.qwen_text,
-        "jina_text_multi": Embedders.jina_text_multi,
-        "jina_text_single": Embedders.jina_text_single,
-        "bm25": Embedders.bm25,
-    }
 
     datasets_in_experiment = []
     for k in args.benchmarks:
-        datasets_in_experiment += benchmarks[k]
-    models_in_experiment = []
-    for k in args.models:
-        models_in_experiment.append(models[k])
+        datasets_in_experiment += BENCHMARKS[k]
 
-    if args.hyper_config:
-        with open(args.hyper_config, 'r') as f:
-            cfg = json.load(f)
-        lrs = cfg.get('lrs')
-        ks = cfg.get('ks')
-        n_steps = cfg.get('n_steps')
-        Ts = cfg.get('Ts')
-        mixture = cfg.get('mixture')
-        if 'loss_funcs' in cfg:
-            loss_funcs = [globals()[name] for name in cfg['loss_funcs']]
-        if 'optimization_funcs' in cfg:
-            optimization_funcs = [OptimizationFunctions[name].name for name in cfg['optimization_funcs']]
-        if 'optimizers' in cfg:
-            optimizers = [getattr(torch.optim, name) for name in cfg['optimizers']]
-    
-    models_in_experiment = [Retriever(m) for m in models_in_experiment]
-    h = get_run_hash(models_in_experiment, datasets_in_experiment, lrs, ks, n_steps, Ts, mixture,
-                     loss_funcs, optimizers, optimization_funcs)
+    with open(args.hyper_config, 'r') as f:
+        cfg = json.load(f)
+    exp_params = load_parameters(cfg)
+
+    param_combinations = [
+        params for params
+        in product(exp_params.lrs, exp_params.ks, exp_params.n_steps, exp_params.Ts, exp_params.mixture,
+                   exp_params.loss_funcs, exp_params.optimizers, exp_params.optimization_funcs)
+    ]
+    models_in_experiment = [Retriever(getattr(Embedders, m)) for m in args.models]
+
+    h = get_run_hash(models_in_experiment, datasets_in_experiment, *asdict(exp_params).values())
     out_dir = f"output/results-{h}{args.out_dir_suffix}"
     os.makedirs(out_dir, exist_ok=True)
     print(f"Results in {out_dir}")
@@ -234,11 +240,6 @@ def main(args):
                             mod_1_weight = res_dict["weight"]
 
                 exp_results = []
-                param_combinations = [
-                    (lr, k, n, t, mixture_alpha, loss_func, optimizer, optimization_func)
-                    for lr, k, n, t, mixture_alpha, loss_func, optimizer, optimization_func,
-                    in product(lrs, ks, n_steps, Ts, mixture, loss_funcs, optimizers, optimization_funcs)]
-                
                 input_params = []
                 for primary_model, aux_model, feedback_weight in [(mod_1, mod_2, 1-mod_1_weight),
                                                                   (mod_2, mod_1, mod_1_weight)]:
@@ -285,7 +286,7 @@ def main(args):
                         "temp": t,
                         "mixture_alpha": mixture_alpha,
                         "loss_func": loss_func.__name__,
-                        "optimization_func": optimization_func,
+                        "optimization_func": OptimizationFunctions(optimization_func).name,
                         "optimizer": optimizer.__name__,
                         "dataset": dataset.id,
                     })
@@ -338,8 +339,8 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--models', nargs='+', required=True)
-    parser.add_argument('--benchmarks', nargs='+', required=True)
+    parser.add_argument('--models', nargs='+', required=True, choices=all_embedders)
+    parser.add_argument('--benchmarks', nargs='+', required=True, choices=BENCHMARKS.keys())
     parser.add_argument('--hyper_config', type=str, default='cfg.json')
     parser.add_argument('--datasets_path_prefix', default='')
     parser.add_argument('-p', '--use_parallelization', type=ast.literal_eval, default=False)

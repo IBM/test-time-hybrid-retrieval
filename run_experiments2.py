@@ -235,9 +235,9 @@ def main(args):
                 mod_2.load_embs(dataset)
                 r2, top_idx_2 = mod_2.run_retrieval(dataset)
 
-                baselines = run_baselines(dataset, mod_1, mod_2,
-                                          r1, r2, top_idx_1, top_idx_2)
-                rows += baselines
+                # baselines = run_baselines(dataset, mod_1, mod_2,
+                #                           r1, r2, top_idx_1, top_idx_2)
+                # rows += baselines
                 mod_1_weight = 0.5
                 # if args.tune:
                 #     for res_dict in baselines:

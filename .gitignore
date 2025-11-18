@@ -145,3 +145,5 @@ volumes
 *.pdf
 *.md
 *.prof
+*.err
+*.out

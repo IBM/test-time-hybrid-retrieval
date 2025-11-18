@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 
 from dataset_configs import DataSplit, RagDataset
-from embedding_configs import EncoderConfig
+from embedding_configs import EncoderConfig, Modality
 from utils import get_device, slice_sparse_coo_tensor
 
 
@@ -91,7 +91,12 @@ class Retriever:
                 return [torch.from_numpy(arr) for arr in list(embs_obj)]
             else:  # a single tensor with all the (single- or multi-vector) embeddings
                 return torch.from_numpy(embs_obj)
-
+        # if 'Linq' in self.id:
+        #     self.id = "Linq-Embed-Mistral-Qwen3-VL-8B-Instruct"
+        # if 'Qwen3-Embedding-4B' in self.id:
+        #     self.id = 'Qwen3-Embedding-4B-Qwen3-VL-8B-Instruct'
+        # if 'jina-embeddings-v4' in self.id and self.modality == Modality.TEXT:
+        #     self.id = 'jina-embeddings-v4-Qwen3-VL-8B-Instruct_text'
         p = dataset.path / (self.id + "_embeddings")
         k = self.get_embs_key()
         d = load_to_torch(

@@ -237,7 +237,7 @@ class NvidiaEmbedder(BatchedMultiEmbedder):
             trust_remote_code=True,
             torch_dtype=torch.bfloat16,
             attn_implementation="flash_attention_2" if is_flash_attn_2_available() else None,
-            revision='50c36f4d5271c6851aa08bd26d69f6e7ca8b870c'  # TODO what is this?
+            revision='50c36f4d5271c6851aa08bd26d69f6e7ca8b870c'
         ).eval()
         self.model = model
 

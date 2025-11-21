@@ -91,7 +91,6 @@ def optimize_queries_union(main_model, feedback_model, dataset, k, lr, n_steps, 
     docs_per_query = []
 
     qs = [q[i].unsqueeze(0).clone().detach().requires_grad_(True) for i in range(Q)]
-    opt = optimizer(qs, lr=lr)  # one optimizer for all queries
 
     sim1 = main_model.compute_scores(q, d)
     sim2 = feedback_model.compute_scores(f_q, f_d)
@@ -100,19 +99,21 @@ def optimize_queries_union(main_model, feedback_model, dataset, k, lr, n_steps, 
     _, top_idx2 = torch.topk(sim2, k=k, dim=-1)
 
     for i in range(Q):
+        q_i = q[i].unsqueeze(0).detach().clone().requires_grad_(True)
+        opt = optimizer([q_i], lr=lr)
         u = torch.unique(torch.cat([top_idx1[i], top_idx2[i]]))
         docs_u = d.index_select(0, u.to(d.device))
         doc_indices_per_query.append(u.detach().cpu())
         docs_per_query.append(docs_u.detach().cpu())
 
-        d1 = torch.softmax(sim1[i, u] / T, dim=-1).to(device)
-        d2 = torch.softmax(sim2[i, u] / T, dim=-1).to(device)
+        d1 = torch.softmax(sim1[i, u] / T, dim=-1)
+        d2 = torch.softmax(sim2[i, u] / T, dim=-1)
         mixture_d = (1-mixture_alpha)*d1 + mixture_alpha*d2
         for step in range(n_steps):
-            d1 = F.softmax(main_model.compute_scores(qs[i], docs_u) / T, -1).to(device)
+            d1 = F.softmax(main_model.compute_scores(qs[i], docs_u) / T, -1)
             loss = loss_func(mixture_d, d1)
             opt.zero_grad(set_to_none=True)
-            loss.backward(retain_graph=True)
+            loss.backward()
             opt.step()
         out_q.append(qs[i].detach().squeeze())
 

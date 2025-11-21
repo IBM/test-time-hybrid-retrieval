@@ -1,5 +1,6 @@
 import os
 import random
+from tqdm import tqdm
 
 import numpy as np
 import torch
@@ -30,7 +31,7 @@ def get_doc(context_1, context_2, doc_id):
 
 
 def batch(x, n):
-    for i in range(0, len(x), n):
+    for i in tqdm(range(0, len(x), n)):
         yield x[i:i + n]
 
 

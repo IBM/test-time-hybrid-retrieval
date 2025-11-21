@@ -85,35 +85,35 @@ def run_baselines(dataset: RagDataset, mod_1, mod_2, r1, r2, top_idx_1, top_idx_
         "weighted_sim_score_softmax": partial(sim_score_fusion, normal_func=normalize_softmax),
     }
 
-    if args.tune:
-        r1_dev, _ = mod_1.run_retrieval(dataset, split=DataSplit.DEV)
-        r2_dev, _ = mod_2.run_retrieval(dataset, split=DataSplit.DEV)
+    # if args.tune:
+    #     r1_dev, _ = mod_1.run_retrieval(dataset, split=DataSplit.DEV)
+    #     r2_dev, _ = mod_2.run_retrieval(dataset, split=DataSplit.DEV)
 
-        for pipeline, fusion_func in tunable_pipelines.items():
-            best_val, best_alpha = 0, 0
-            for alpha in [0.1*i for i in range(1, 10)]:
-                r = fusion_func(r1_dev, r2_dev, alpha=alpha)
+    #     for pipeline, fusion_func in tunable_pipelines.items():
+    #         best_val, best_alpha = 0, 0
+    #         for alpha in [0.1*i for i in range(1, 10)]:
+    #             r = fusion_func(r1_dev, r2_dev, alpha=alpha)
 
-                eval = dataset.evaluate(r)
-                if eval[target_metric] > best_val:
-                    best_val = eval[target_metric]
-                    best_alpha = alpha
+    #             eval = dataset.evaluate(r)
+    #             if eval[target_metric] > best_val:
+    #                 best_val = eval[target_metric]
+    #                 best_alpha = alpha
 
-            r = fusion_func(r1, r2, alpha=best_alpha)
-            run_id = f"{pipeline}-{mod_1.id}-{mod_2.id}"
+    #         r = fusion_func(r1, r2, alpha=best_alpha)
+    #         run_id = f"{pipeline}-{mod_1.id}-{mod_2.id}"
 
-            results.append({
-                **info_dict,
-                "run_id": run_id,
-                "weight": best_alpha,
-                "main_model": "",
-                "feedback_model": "",
-                "metrics": dataset.evaluate(r)
-            })
-    else:
-        for pipeline, fusion_func in tunable_pipelines.items():
-            for alpha in [0.1*i for i in range(1, 10)]:
-                late_pipelines[f"{pipeline}_{alpha:.2f}-{1-alpha:.2f}"] = partial(fusion_func, alpha=alpha)
+    #         results.append({
+    #             **info_dict,
+    #             "run_id": run_id,
+    #             "weight": best_alpha,
+    #             "main_model": "",
+    #             "feedback_model": "",
+    #             "metrics": dataset.evaluate(r)
+    #         })
+    # else:
+    #     for pipeline, fusion_func in tunable_pipelines.items():
+    #         for alpha in [0.1*i for i in range(1, 10)]:
+    #             late_pipelines[f"{pipeline}_{alpha:.2f}-{1-alpha:.2f}"] = partial(fusion_func, alpha=alpha)
 
     for pipeline, fusion_func in late_pipelines.items():
         r = fusion_func(r1, r2)
@@ -235,9 +235,9 @@ def main(args):
                 mod_2.load_embs(dataset)
                 r2, top_idx_2 = mod_2.run_retrieval(dataset)
 
-                # baselines = run_baselines(dataset, mod_1, mod_2,
-                #                           r1, r2, top_idx_1, top_idx_2)
-                # rows += baselines
+                baselines = run_baselines(dataset, mod_1, mod_2,
+                                          r1, r2, top_idx_1, top_idx_2)
+                rows += baselines
                 mod_1_weight = 0.5
                 # if args.tune:
                 #     for res_dict in baselines:

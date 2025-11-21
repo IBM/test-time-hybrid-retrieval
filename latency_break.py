@@ -14,18 +14,16 @@ primary_index  = df["primary_index_search_latency"].values
 comp_query     = df["complementary_query_encoding_latency"].values
 comp_index     = df["complementary_index_search_latency"].values
 optimization   = df["test_time_optimization"].values
-scoring        = df["scoring"].values
 
 # -------------------------------------------------
-# Colors & hatches (matching your screenshot)
+# Colors & hatches
 # -------------------------------------------------
 colors = {
-    "PrimaryQuery":  "#6aaed6",  # blue
-    "PrimaryIndex":  "#08519c",  # dark blue
-    "CompQuery":     "#fdae6b",  # orange
-    "CompIndex":     "#f16913",  # darker orange
-    "Optimization":  "#de2d26",  # red
-    "Scoring":       "#9e9ac8",  # purple
+    "PrimaryQuery":  "#6aaed6",
+    "PrimaryIndex":  "#08519c",
+    "CompQuery":     "#fdae6b",
+    "CompIndex":     "#f16913",
+    "Optimization":  "#de2d26",
 }
 
 hatches = {
@@ -34,7 +32,6 @@ hatches = {
     "CompQuery":     "++",
     "CompIndex":     "**",
     "Optimization":  "|||",
-    "Scoring":       "oo",
 }
 
 plt.rcParams.update({
@@ -50,15 +47,19 @@ y_pos = np.arange(len(variants))
 height = 0.35
 
 components = [
-    ("Primary query encoding",      primary_query, colors["PrimaryQuery"], hatches["PrimaryQuery"]),
-    ("Primary index search",        primary_index, colors["PrimaryIndex"], hatches["PrimaryIndex"]),
-    ("Complementary query encoding", comp_query,   colors["CompQuery"],    hatches["CompQuery"]),
-    ("Complementary index search",   comp_index,   colors["CompIndex"],    hatches["CompIndex"]),
-    ("Test-time optimization",       optimization, colors["Optimization"], hatches["Optimization"]),
-    ("Scoring",                      scoring,      colors["Scoring"],      hatches["Scoring"]),
+    ("Primary query encoding",       primary_query, colors["PrimaryQuery"],  hatches["PrimaryQuery"]),
+    ("Primary index search",         primary_index, colors["PrimaryIndex"],  hatches["PrimaryIndex"]),
+    ("Complementary query encoding", comp_query,    colors["CompQuery"],     hatches["CompQuery"]),
+    ("Complementary index search",   comp_index,    colors["CompIndex"],     hatches["CompIndex"]),
+    ("Test-time optimization",       optimization,  colors["Optimization"],  hatches["Optimization"]),
 ]
 
-fig, ax = plt.subplots(figsize=(8, 1.8 * len(variants)))
+# Figure with 2 rows: top = plot, bottom = legend
+fig = plt.figure(figsize=(8, 1.8 * len(variants) + 1.5))
+gs = fig.add_gridspec(nrows=2, ncols=1, height_ratios=[4, 1])
+
+ax = fig.add_subplot(gs[0])
+ax_legend = fig.add_subplot(gs[1])
 
 left = np.zeros(len(variants))
 
@@ -78,7 +79,6 @@ for label, values, color, hatch in components:
 
 totals = left
 
-# Add total latency labels
 for y, total in zip(y_pos, totals):
     ax.text(
         total + totals.max() * 0.01,
@@ -97,12 +97,20 @@ ax.invert_yaxis()
 ax.set_xlabel("Latency (ms)")
 ax.set_xlim(0, totals.max() * 1.15)
 
-ax.legend(
-    loc="center left",
-    bbox_to_anchor=(1.02, 0.5),
+# -------------------------------------------------
+# Legend in its own axis at the bottom
+# -------------------------------------------------
+ax_legend.axis("off")
+handles, labels = ax.get_legend_handles_labels()
+ax_legend.legend(
+    handles,
+    labels,
+    loc="center",
+    ncol=3,
     frameon=True,
 )
 
-plt.tight_layout()
-fig.savefig("plot.png", dpi=300, bbox_inches="tight")
+fig.tight_layout()
+
+fig.savefig("latency_break.png", dpi=300, bbox_inches="tight")
 plt.close(fig)

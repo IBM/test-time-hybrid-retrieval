@@ -114,9 +114,9 @@ def main():
     set_seed(args.seed)
     vidore2 = [
         Datasets.esg_reports_v2,
-        Datasets.biomedical_lectures_v2,
-        Datasets.economics_reports_v2,
-        Datasets.esg_reports_human_labeled_v2,
+        # Datasets.biomedical_lectures_v2,
+        # Datasets.economics_reports_v2,
+        # Datasets.esg_reports_human_labeled_v2,
     ]
 
     embedder_cfgs: list[EncoderConfig] = [getattr(Embedders, m) for m in args.embedders]
@@ -202,32 +202,6 @@ def main():
                     )
                     r2, _ = mod2.run_retrieval(dataset)
 
-                    # Fusion baselines for this (vision, text) pair
-                    runner.bench(
-                        f"fusion[RRF][{dataset.id}][{mod1.id}+{mod2.id}]",
-                        partial(reciprocal_rank_fusion, r1=r1, r2=r2),
-                        group=f"RRF-{mod1.id}-{mod2.id}",
-                        dataset_id=dataset.id,
-                    )
-                    runner.bench(
-                        f"fusion[average][{dataset.id}][{mod1.id}+{mod2.id}]",
-                        partial(average_ranking_fusion, r1=r1, r2=r2),
-                        group=f"average-{mod1.id}-{mod2.id}",
-                        dataset_id=dataset.id,
-                    )
-                    runner.bench(
-                        f"fusion[sim_score_minmax][{dataset.id}][{mod1.id}+{mod2.id}]",
-                        partial(sim_score_fusion, r1=r1, r2=r2, normal_func=normalize_min_max),
-                        group=f"sim_score_minmax-{mod1.id}-{mod2.id}",
-                        dataset_id=dataset.id,
-                    )
-                    runner.bench(
-                        f"fusion[sim_score_softmax][{dataset.id}][{mod1.id}+{mod2.id}]",
-                        partial(sim_score_fusion, r1=r1, r2=r2, normal_func=normalize_softmax),
-                        group=f"sim_score_softmax-{mod1.id}-{mod2.id}",
-                        dataset_id=dataset.id,
-                    )
-
                     for opt_func_name in args.opt_func:
                         opt_func = OptimizationFunctions[opt_func_name].value
                         for n_steps in args.opt_steps:
@@ -238,7 +212,7 @@ def main():
                                     main_model=mod1, feedback_model=mod2, dataset=dataset,
                                     device=device,
                                     k=10,
-                                    lr=0.001,
+                                    lr=0.0001,
                                     n_steps=n_steps,
                                     T=1,
                                     loss_func=kl_divergence,

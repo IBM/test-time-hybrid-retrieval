@@ -43,7 +43,7 @@ def safe_resize(img: Image.Image) -> Image.Image:
 def run_docling_on_hf(dataset: str, name: str):
     converter = DocumentConverter()
     ds = datasets.load_dataset(dataset, name=name)["test"]
-    images = {r["corpus-id"]: r["image"] for r in ds}
+    images = {r["corpus_id"]: r["image"] for r in ds}
 
     out_dir = Path(dataset.split("/")[1])
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -74,18 +74,18 @@ def run_docling_on_hf(dataset: str, name: str):
 
 
 def download_hf_queries(dataset: str, out_dir: Path):
-    for config_name in ["default", "queries"]:
+    for config_name in ["queries"]:
         try:
-            ds = datasets.load_dataset(dataset, name=config_name)["test"]
+            ds = datasets.load_dataset(dataset, name=config_name,split="test")
         except:
             continue
-    queries = {r["query-id"]: r["query"] for r in ds}
+    queries = {r["query_id"]: r["query"] for r in ds}
 
     qrels = datasets.load_dataset(dataset, name="qrels")["test"]
     query_to_gold = defaultdict(dict)
     for e in qrels:
-        query = queries[e['query-id']]
-        query_to_gold[query].update({e['corpus-id']: e['score']})
+        query = queries[e['query_id']]
+        query_to_gold[query].update({e['corpus_id']: e['score']})
 
     out_dir.mkdir(parents=True, exist_ok=True)
     benchmark_df = pd.DataFrame([{"question": q, "correct_answer_document_ids": qrel}
@@ -94,19 +94,52 @@ def download_hf_queries(dataset: str, out_dir: Path):
 
 
 def download_hf_images(dataset: str, name: str, out_dir: Path):
-    ds = datasets.load_dataset(dataset, name=name, split="test")
-
+    for config_name in ["corpus"]:
+        try:
+            ds = datasets.load_dataset(dataset, name=config_name,split="test")
+        except:
+            continue
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if len(list(out_dir.rglob("*.jpg"))) == len(ds):
         return
 
     for record in tqdm(ds, desc="saving images"):
-        cid, img = record["corpus-id"], record["image"]
+        cid, img = record["corpus_id"], record["image"]
         img_path = out_dir / f"{cid}.jpg"
         if img_path.exists():
             continue
         img.save(img_path, format="JPEG")
+
+def download_hf_markdown(dataset: str, name: str, out_dir: Path):
+    # Load the HF split that contains the markdown
+    for config_name in ["corpus"]:
+        try:
+            ds = datasets.load_dataset(dataset, name=config_name, split="test")
+        except:
+            continue
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    for record in tqdm(ds, desc="saving markdown"):
+        cid = record["corpus_id"]
+        md  = record.get("markdown", None)
+
+        if md is None:
+            continue  # nothing to save
+
+        md_path = out_dir / f"{cid}.md"
+        if md_path.exists():
+            continue
+
+        # md might be a list of lines or a single string depending on the dataset
+        if isinstance(md, list):
+            text = "\n".join(md)
+        else:
+            text = str(md)
+
+        with open(md_path, "w") as f:
+            f.write(text)
 
 
 def run_docling():
@@ -148,11 +181,12 @@ def run_docling():
 
 
 if __name__ == "__main__":
-    from dataset_configs import VIDORE1_DATASETS, VIDORE2_DATASETS
-    for dataset in [*VIDORE1_DATASETS,*VIDORE2_DATASETS]:
+    from dataset_configs import VIDORE1_DATASETS, VIDORE2_DATASETS, VIDORE3_DATASETS
+    for dataset in [*VIDORE3_DATASETS]:
         dataset_name, subset_name = dataset.split("/")
         dataset_hf_id = f"vidore/{subset_name}"
-        download_hf_queries(dataset_hf_id, out_dir=Path(dataset_name) / subset_name / "benchmark")
-        download_hf_images(dataset_hf_id, "corpus", out_dir=Path(dataset_name)/ subset_name / "images")
+        # download_hf_queries(dataset_hf_id, out_dir=Path(dataset_name) / subset_name / "benchmark")
+        # download_hf_images(dataset_hf_id, "corpus", out_dir=Path(dataset_name)/ subset_name / "images")
+        download_hf_markdown(dataset_hf_id,"corpus",out_dir=Path(dataset_name) / subset_name / "texts")
 
-    run_docling()
+    # run_docling()

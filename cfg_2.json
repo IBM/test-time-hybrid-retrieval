@@ -1,0 +1,11 @@
+{
+    "lrs": [1e-5,1e-4],
+    "ks": [10],
+    "n_steps":  [0, 5, 10, 15, 20, 25, 30, 35, 40, 45,
+    50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100],
+    "Ts": [1],
+    "mixture": [1],
+    "loss_funcs": ["kl_divergence"],
+    "optimization_funcs": ["union_no_search"],
+    "optimizers": ["Adam"]
+}

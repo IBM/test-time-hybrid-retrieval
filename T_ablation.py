@@ -119,6 +119,7 @@ def plot_metric(df, metric, plot_title=None, out_dir=None):
     ymin, ymax = df_agg[metric].min(), df_agg[metric].max()
     margin = (ymax - ymin) * 0.05 if ymax > ymin else 0.01
     ax.set_ylim(ymin - margin, ymax + margin)
+    ax.set_xlim(75)
 
     # Clean axes and grid
     for spine in ["top", "right"]:

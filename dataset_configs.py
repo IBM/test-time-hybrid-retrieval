@@ -30,6 +30,15 @@ class Datasets:
     economics_reports_v2 = 'Vidore2/economics_reports_v2'
     esg_reports_human_labeled_v2 = 'Vidore2/esg_reports_human_labeled_v2'
 
+    vidore_v3_hr = "Vidore3/vidore_v3_hr"
+    vidore_v3_finance_en = "Vidore3/vidore_v3_finance_en"
+    vidore_v3_industrial = "Vidore3/vidore_v3_industrial"
+    vidore_v3_pharmaceuticals = "Vidore3/vidore_v3_pharmaceuticals"
+    vidore_v3_computer_science = "Vidore3/vidore_v3_computer_science"
+    vidore_v3_energy = "Vidore3/vidore_v3_energy"
+    vidore_v3_physics = "Vidore3/vidore_v3_physics"
+    vidore_v3_finance_fr = "Vidore3/vidore_v3_finance_fr"
+
 
 VIDORE1_DATASETS = [
     Datasets.arxivqa,
@@ -52,8 +61,19 @@ VIDORE2_DATASETS = [
     Datasets.esg_reports_human_labeled_v2
 ]
 
+VIDORE3_DATASETS = [
+    Datasets.vidore_v3_hr,
+    Datasets.vidore_v3_finance_en,
+    Datasets.vidore_v3_industrial,
+    Datasets.vidore_v3_pharmaceuticals,
+    Datasets.vidore_v3_computer_science,
+    Datasets.vidore_v3_energy,
+    Datasets.vidore_v3_physics,
+    Datasets.vidore_v3_finance_fr,
+]
 
-BENCHMARKS = {'vidore1': VIDORE1_DATASETS, 'vidore2': VIDORE2_DATASETS}
+
+BENCHMARKS = {'vidore1': VIDORE1_DATASETS, 'vidore2': VIDORE2_DATASETS, 'vidore3': VIDORE3_DATASETS}
 
 
 class RagDataset:

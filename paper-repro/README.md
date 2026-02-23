@@ -1,13 +1,3 @@
-# Multimodal Hybrid Retrieval with Guided Query Refinement (GQR)
-This repository provides an experimental framework for testing visual document retrieval methods, focusing on hybrid retrieval that combines vision-centric multimodal encoders and semantic text encoders. 
-
-It contains an implementation of a novel hybrid method - **Guided Query Refinement (GQR)** - as introduced in *[Uzan et al. 2025](https://arxiv.org/abs/2510.05038)*.
-
-GQR is a test-time optimization approach that refines the query representation of a *primary* retriever using guidance from the query-documents similarity scores of a *complementary* retriever.
-
-## 📂 Project Structure
-The repository is organized into several key components:
-
 **Execution Scripts**:
 
 `ingest_datasets.py`: Downloads and preprocess datasets from the ViDoRe1 and ViDoRe2 benchmarks.
@@ -112,19 +102,3 @@ The output of the experiments will be saved in the output/ directory.
 
 Inside, you will find CSV files for each metric (e.g., ndcg@5.csv, recall@10.csv) summarizing the performance across all datasets.
 `run_reranker.py` and `bench_latency_vidore2.py` save their results in similarly structured output directories, containing performance metrics and latency measurements in JSON format.
-
-
-### 📜 Citation
-Omri Uzan, Asaf Yehudai, Roi Pony, Eyal Shnarch and Ariel Gera (2025). 
-[Guided Query Refinement: Multimodal Hybrid Retrieval with Test-Time Optimization](https://arxiv.org/abs/2510.05038).
-
-```
-@article{uzan2025guidedqueryrefinement,
-      title={Guided Query Refinement: Multimodal Hybrid Retrieval with Test-Time Optimization}, 
-      author={Omri Uzan and Asaf Yehudai and Roi Pony and Eyal Shnarch and Ariel Gera},
-      journal={arXiv:2510.05038},
-      year={2025},
-      url={https://arxiv.org/abs/2510.05038}, 
-}
-```
-

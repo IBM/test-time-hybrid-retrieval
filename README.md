@@ -1,7 +1,7 @@
 # Multimodal Hybrid Retrieval with Guided Query Refinement (GQR)
 
 
-📘 [Tutorial](https://colab.research.google.com/drive/1VNBl7tsYAhblXtiePGyFk5lrFPi-ulIP?usp=sharing)   | 🌐 [Website](https://colab.research.google.com/drive/1VNBl7tsYAhblXtiePGyFk5lrFPi-ulIP?usp=sharing)   | 📄 [Paper](https://arxiv.org/abs/2510.05038)
+📘 [Tutorial](https://colab.research.google.com/drive/1WXtQxLFOxJYROAimCQoikiICs8Udbe4V?usp=sharing)   | 🌐 [Website](https://colab.research.google.com/drive/1VNBl7tsYAhblXtiePGyFk5lrFPi-ulIP?usp=sharing)   | 📄 [Paper](https://arxiv.org/abs/2510.05038)
 
 This repository contains the official code for the paper:
 

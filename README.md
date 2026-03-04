@@ -1,11 +1,14 @@
 # Multimodal Hybrid Retrieval with Guided Query Refinement (GQR)
 
+
+📘 [Tutorial](https://colab.research.google.com/drive/1VNBl7tsYAhblXtiePGyFk5lrFPi-ulIP?usp=sharing)   | 🌐 [Website](https://colab.research.google.com/drive/1VNBl7tsYAhblXtiePGyFk5lrFPi-ulIP?usp=sharing)   | 📄 [Paper](https://arxiv.org/abs/2510.05038)
+
 This repository contains the official code for the paper:
 
-**Guided Query Refinement: Multimodal Hybrid Retrieval with Test-Time Optimization**, *Uzan et al., ICLR 2026*  [arXiv:2510.05038](https://arxiv.org/abs/2510.05038)
+**Guided Query Refinement: Multimodal Hybrid Retrieval with Test-Time Optimization**, *Uzan et al., ICLR 2026* 
 
-Guided Query Refinement (GQR) is a **test-time optimization** method for multimodal retrieval.  
-It improves a *primary* retriever by refining its query representation using similarity signals from a *complementary* retriever, enabling stronger hybrid retrieval without additional training.
+GQR is a test-time optimization method for multimodal retrieval.  
+It improves a primary retriever retrieval by refining its query representation at test-time using similarity signals from a complementary retriever, enabling stronger hybrid retrieval without additional training.
 
 ---
 

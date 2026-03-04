@@ -138,10 +138,8 @@ volumes
 
 *.npz
 *.csv
-*.png
 *.jpg
 *.txt
 *.arrow
 *.pdf
-*.md
 *.prof

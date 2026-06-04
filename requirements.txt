@@ -3,7 +3,7 @@ pandas==2.3.1
 datasets==4.0.0
 sentence_transformers==5.1.0
 fastembed==0.7.2
-docling==2.34
+docling==2.94.0
 colpali_engine==0.3.12
 opencv-python==4.12.0.88
 pillow==12.2.0

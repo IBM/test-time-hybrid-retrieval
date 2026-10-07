@@ -1,6 +1,6 @@
 transformers[torch]==5.10.1
 pandas==2.3.1
-datasets==4.0.0
+datasets==5.0.1
 sentence_transformers==5.6.0
 fastembed==0.7.2
 docling==2.94.0
